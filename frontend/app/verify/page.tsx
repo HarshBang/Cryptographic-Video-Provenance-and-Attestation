@@ -1,9 +1,10 @@
 "use client"
 
 import { useState } from "react"
-import { Upload, CheckCircle, AlertTriangle, XCircle, Search, FileVideo, Shield, ExternalLink } from "lucide-react"
+import { Upload, CheckCircle, AlertTriangle, XCircle, Search, FileVideo, Shield, ExternalLink, Fingerprint, FileSignature } from "lucide-react"
 import { cn } from "@/lib/utils"
 import Link from "next/link"
+import { API_BASE_URL } from "@/lib/config"
 
 export default function VerifyPage() {
     const [status, setStatus] = useState<"idle" | "analyzing" | "result">("idle")
@@ -21,8 +22,7 @@ export default function VerifyPage() {
                 const file = files[0]
 
                 try {
-                    // Dynamic import to avoid SSR issues if api uses browser globals
-                    const API_BASE_URL = "http://localhost:8000/api"
+                    // Phase 2: Use config for API URL
                     const formData = new FormData()
                     formData.append("file", file)
 
@@ -65,7 +65,9 @@ export default function VerifyPage() {
             <main className="flex-1 w-full max-w-[800px] mx-auto px-6 py-12 flex flex-col items-center">
                 <div className="text-center mb-10 space-y-2">
                     <h1 className="text-3xl md:text-4xl font-bold text-white">Verify Video Integrity</h1>
-                    <p className="text-vca-text-secondary text-lg">Check if a video has been modified or tampered with.</p>
+                    <p className="text-vca-text-secondary text-lg">
+                        Phase 2: Verify SHA-256, pHash similarity, and Ed25519 signatures.
+                    </p>
                 </div>
 
                 {/* Upload Zone */}
@@ -130,42 +132,107 @@ export default function VerifyPage() {
                             </div>
                         </div>
 
-                        {/* Evidence Details */}
-                        {resultType === "verified" && report?.metadata && (
+                        {/* Phase 2: Enhanced Evidence Details */}
+                        {(resultType === "verified" || resultType === "warning") && report && (
                             <div className="bg-vca-surface-dark border border-vca-border-dark rounded-xl overflow-hidden">
                                 <div className="p-4 border-b border-vca-border-dark bg-[#192233]">
-                                    <h3 className="font-bold text-white text-sm">Evidence Report</h3>
+                                    <h3 className="font-bold text-white text-sm">Phase 2 Evidence Report</h3>
                                 </div>
                                 <div className="p-6 space-y-4">
+                                    {/* Credential ID */}
+                                    {report.credential_id && (
+                                        <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                                            <span className="text-slate-400 text-sm">Credential ID</span>
+                                            <code className="text-primary text-xs font-mono">{report.credential_id}</code>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Match Type */}
                                     <div className="flex justify-between items-center py-2 border-b border-slate-800">
-                                        <span className="text-slate-400 text-sm">Original Filename</span>
-                                        <span className="text-white text-sm font-medium">{report.metadata.filename}</span>
+                                        <span className="text-slate-400 text-sm">Match Type</span>
+                                        <span className={cn(
+                                            "text-sm font-bold",
+                                            report.match_type === "exact" ? "text-green-500" : "text-yellow-500"
+                                        )}>
+                                            {report.match_type === "exact" ? "Exact SHA-256" : "pHash Similar"}
+                                        </span>
                                     </div>
-                                    <div className="flex justify-between items-center py-2 border-b border-slate-800">
-                                        <span className="text-slate-400 text-sm">SHA-256 Hash</span>
-                                        <code className="text-primary text-xs font-mono">{report.metadata.sha256.substring(0, 20)}...</code>
-                                    </div>
-                                    <div className="flex justify-between items-center py-2">
-                                        <span className="text-slate-400 text-sm">Content Match</span>
-                                        <span className="text-sm font-bold text-green-500">100% Exact Match</span>
-                                    </div>
+                                    
+                                    {/* Phase 2: Signature Validity */}
+                                    {report.signature_valid !== undefined && (
+                                        <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                                            <span className="text-slate-400 text-sm flex items-center gap-2">
+                                                <FileSignature className="w-3 h-3" />
+                                                Signature Valid
+                                            </span>
+                                            <span className={cn(
+                                                "text-sm font-bold",
+                                                report.signature_valid ? "text-green-500" : "text-red-500"
+                                            )}>
+                                                {report.signature_valid ? "✓ Valid" : "✗ Invalid"}
+                                            </span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Phase 2: Manifest Hash */}
+                                    {report.manifest_hash && (
+                                        <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                                            <span className="text-slate-400 text-sm flex items-center gap-2">
+                                                <Fingerprint className="w-3 h-3" />
+                                                Manifest Hash
+                                            </span>
+                                            <code className="text-slate-300 text-xs font-mono">{report.manifest_hash.substring(0, 24)}...</code>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Phase 2: Key Fingerprint */}
+                                    {report.key_fingerprint && (
+                                        <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                                            <span className="text-slate-400 text-sm flex items-center gap-2">
+                                                <Shield className="w-3 h-3" />
+                                                Key Fingerprint
+                                            </span>
+                                            <code className="text-slate-300 text-xs font-mono">{report.key_fingerprint}</code>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Creator Info */}
+                                    {report.creator_info && (
+                                        <div className="flex justify-between items-center py-2 border-b border-slate-800">
+                                            <span className="text-slate-400 text-sm">Creator</span>
+                                            <span className="text-white text-sm">{report.creator_info.name || "Unknown"}</span>
+                                        </div>
+                                    )}
+                                    
+                                    {/* Message */}
+                                    {report.message && (
+                                        <div className="pt-2">
+                                            <p className="text-sm text-slate-300">{report.message}</p>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         )}
 
-                        {resultType === "warning" && report?.matches && (
+                        {/* Phase 2: Similar Matches */}
+                        {report?.matches && report.matches.length > 0 && (
                             <div className="bg-vca-surface-dark border border-vca-border-dark rounded-xl overflow-hidden">
                                 <div className="p-4 border-b border-vca-border-dark bg-[#192233]">
                                     <h3 className="font-bold text-white text-sm">Similarity Report</h3>
                                 </div>
                                 <div className="p-6">
-                                    <p className="text-sm text-slate-300 mb-4">Found {report.matches.length} similar video(s) signed by our creators.</p>
+                                    <p className="text-sm text-slate-300 mb-4">Found {report.matches.length} similar video(s).</p>
                                     {report.matches.map((m: any, i: number) => (
                                         <div key={i} className="p-3 bg-slate-800/50 rounded mb-2">
                                             <div className="flex justify-between text-sm">
                                                 <span className="text-white">{m.filename}</span>
-                                                <span className="text-yellow-500 font-mono">Distance: {m.distance}</span>
+                                                <span className="text-yellow-500 font-mono">Dist: {m.distance?.toFixed(2)}</span>
                                             </div>
+                                            {m.credential_id && (
+                                                <div className="text-xs text-slate-500 mt-1">
+                                                    ID: {m.credential_id}
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
