@@ -442,6 +442,40 @@ def find_video_by_phash(phash: str, phash_sequence: List[str] = None, threshold:
     matches.sort(key=lambda x: x["distance"])
     return matches
 
+def list_videos(limit: int = 50, offset: int = 0) -> List[Dict]:
+    """List all signed videos for dashboard - Phase 2"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("""SELECT v.id, v.filename, v.file_size, v.sha256, v.credential_id, 
+                        v.manifest, v.manifest_hash, v.signature, v.public_key, 
+                        v.key_fingerprint, v.sealed_at, v.created_at, c.display_name
+                 FROM videos v
+                 LEFT JOIN creators c ON v.creator_id = c.id
+                 WHERE v.status = 'sealed'
+                 ORDER BY v.sealed_at DESC
+                 LIMIT ? OFFSET ?""", (limit, offset))
+    rows = c.fetchall()
+    conn.close()
+    
+    videos = []
+    for row in rows:
+        videos.append({
+            "id": row[0],
+            "filename": row[1],
+            "file_size": row[2],
+            "sha256": row[3],
+            "credential_id": row[4],
+            "manifest": json.loads(row[5]) if row[5] else None,
+            "manifest_hash": row[6],
+            "signature": row[7],
+            "public_key": row[8],
+            "key_fingerprint": row[9],
+            "sealed_at": row[10],
+            "created_at": row[11],
+            "creator_name": row[12]
+        })
+    return videos
+
 def get_video_by_credential_id(credential_id: str) -> Optional[Dict]:
     """Retrieve video details by credential ID - Phase 2 Enhanced"""
     conn = get_db_connection()

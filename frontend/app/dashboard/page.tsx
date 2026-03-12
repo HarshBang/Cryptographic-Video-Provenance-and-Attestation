@@ -1,13 +1,91 @@
-import { Verified, MailCheck, TrendingUp, CheckCircle, Copy, Download, Play } from "lucide-react"
+"use client"
+
+import { Verified, MailCheck, TrendingUp, CheckCircle, Copy, Download, Play, FileText } from "lucide-react"
 import Link from "next/link"
+import { useState, useEffect } from "react"
+
+interface Video {
+    id: string
+    filename: string
+    file_size: number
+    sha256: string
+    credential_id: string
+    manifest: any
+    manifest_hash: string
+    signature: string
+    public_key: string
+    key_fingerprint: string
+    sealed_at: string
+    created_at: string
+    creator_name: string
+}
 
 export default function DashboardPage() {
+    const [videos, setVideos] = useState<Video[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+
+    useEffect(() => {
+        fetchVideos()
+    }, [])
+
+    const fetchVideos = async () => {
+        try {
+            const { listVideos } = await import("@/lib/api")
+            const data = await listVideos()
+            setVideos(data.videos || [])
+        } catch (e: any) {
+            setError(e.message || "Failed to load videos")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const formatFileSize = (bytes: number) => {
+        if (bytes === 0) return "0 B"
+        const k = 1024
+        const sizes = ["B", "KB", "MB", "GB"]
+        const i = Math.floor(Math.log(bytes) / Math.log(k))
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+    }
+
+    const formatDate = (dateStr: string) => {
+        if (!dateStr) return "N/A"
+        return new Date(dateStr).toLocaleDateString("en-US", {
+            year: "numeric",
+            month: "short",
+            day: "numeric"
+        })
+    }
+
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text)
+    }
+
+    const downloadManifest = (video: Video) => {
+        const manifestData = {
+            ...video.manifest,
+            signature: video.signature,
+            credential_id: video.credential_id,
+            manifest_hash: video.manifest_hash
+        }
+        const blob = new Blob([JSON.stringify(manifestData, null, 2)], { type: "application/json" })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `manifest-${video.credential_id}.json`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+    }
+
     return (
         <>
             {/* Header */}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex flex-col gap-1">
-                    <h2 className="text-white text-3xl md:text-4xl font-bold tracking-tight">Welcome back, Alex</h2>
+                    <h2 className="text-white text-3xl md:text-4xl font-bold tracking-tight">Dashboard</h2>
                     <p className="text-vca-text-secondary text-base font-normal">Manage your signed videos and verification requests.</p>
                 </div>
                 <Link href="/dashboard/intake">
@@ -27,11 +105,11 @@ export default function DashboardPage() {
                     </div>
                     <div>
                         <p className="text-vca-text-secondary text-sm font-medium uppercase tracking-wider">Total Signed Videos</p>
-                        <p className="text-white text-4xl font-bold mt-1">142</p>
+                        <p className="text-white text-4xl font-bold mt-1">{videos.length}</p>
                     </div>
                     <div className="flex items-center gap-2 text-vca-success">
-                        <TrendingUp className="w-4 h-4" />
-                        <span className="text-sm font-medium">+12% this week</span>
+                        <CheckCircle className="w-4 h-4" />
+                        <span className="text-sm font-medium">Phase 2 Sealed</span>
                     </div>
                 </div>
 
@@ -41,12 +119,12 @@ export default function DashboardPage() {
                         <MailCheck className="w-16 h-16 text-white" />
                     </div>
                     <div>
-                        <p className="text-vca-text-secondary text-sm font-medium uppercase tracking-wider">Verification Requests</p>
-                        <p className="text-white text-4xl font-bold mt-1">28</p>
+                        <p className="text-vca-text-secondary text-sm font-medium uppercase tracking-wider">Verification Status</p>
+                        <p className="text-white text-4xl font-bold mt-1">Active</p>
                     </div>
                     <div className="flex items-center gap-2 text-primary">
-                        <CheckCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">All Valid</span>
+                        <TrendingUp className="w-4 h-4" />
+                        <span className="text-sm font-medium">Ready to Verify</span>
                     </div>
                 </div>
             </div>
@@ -54,63 +132,93 @@ export default function DashboardPage() {
             {/* Recent Activity Table */}
             <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="text-white text-xl font-bold">Recent Videos</h3>
-                    <button className="text-primary hover:text-white text-sm font-medium transition-colors">View All</button>
+                    <h3 className="text-white text-xl font-bold">Signed Videos</h3>
+                    <button 
+                        onClick={fetchVideos}
+                        className="text-primary hover:text-white text-sm font-medium transition-colors"
+                    >
+                        Refresh
+                    </button>
                 </div>
-                <div className="rounded-xl border border-vca-border-dark bg-vca-surface-dark overflow-hidden shadow-sm">
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[800px]">
-                            <thead className="bg-[#192233] border-b border-vca-border-dark">
-                                <tr>
-                                    <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider w-16">Preview</th>
-                                    <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Video Title</th>
-                                    <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Date Signed</th>
-                                    <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Credential ID</th>
-                                    <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Integrity Status</th>
-                                    <th className="px-6 py-4 text-right text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-vca-border-dark">
-                                {/* Row 1 */}
-                                <tr className="hover:bg-white/5 transition-colors group">
-                                    <td className="px-6 py-4">
-                                        <div className="h-10 w-16 rounded overflow-hidden bg-slate-800 relative">
-                                            <div className="absolute inset-0 bg-cover bg-center opacity-80 bg-gradient-to-r from-blue-900 to-slate-900" />
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex flex-col">
-                                            <span className="text-white font-medium text-sm">Vlog_Mount_Everest_Final.mp4</span>
-                                            <span className="text-xs text-slate-500">2.4 GB • 4K HEVC</span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="text-slate-300 text-sm">Oct 24, 2023</span>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <div className="flex items-center gap-2">
-                                            <code className="text-xs text-primary bg-primary/10 px-2 py-1 rounded font-mono">0x7a...9f2</code>
-                                            <button className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-white">
-                                                <Copy className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-4">
-                                        <span className="inline-flex items-center gap-1.5 rounded-full bg-vca-success/10 px-2.5 py-1 text-xs font-medium text-vca-success border border-vca-success/20">
-                                            <Verified className="w-3.5 h-3.5" />
-                                            Intact
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <button className="text-slate-400 hover:text-primary transition-colors p-2 rounded hover:bg-primary/10" title="Download Evidence Pack">
-                                            <Download className="w-5 h-5" />
-                                        </button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                
+                {loading && (
+                    <div className="p-8 text-center text-vca-text-secondary">
+                        Loading videos...
                     </div>
-                </div>
+                )}
+                
+                {error && (
+                    <div className="p-8 text-center text-red-400">
+                        Error: {error}
+                    </div>
+                )}
+                
+                {!loading && !error && videos.length === 0 && (
+                    <div className="p-8 text-center text-vca-text-secondary">
+                        No signed videos yet. <Link href="/dashboard/intake" className="text-primary hover:underline">Sign your first video</Link>
+                    </div>
+                )}
+                
+                {!loading && !error && videos.length > 0 && (
+                    <div className="rounded-xl border border-vca-border-dark bg-vca-surface-dark overflow-hidden shadow-sm">
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[800px]">
+                                <thead className="bg-[#192233] border-b border-vca-border-dark">
+                                    <tr>
+                                        <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Video Title</th>
+                                        <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Date Signed</th>
+                                        <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Credential ID</th>
+                                        <th className="px-6 py-4 text-left text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-4 text-right text-vca-text-secondary text-xs font-semibold uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-vca-border-dark">
+                                    {videos.map((video) => (
+                                        <tr key={video.id} className="hover:bg-white/5 transition-colors group">
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="text-white font-medium text-sm">{video.filename}</span>
+                                                    <span className="text-xs text-slate-500">{formatFileSize(video.file_size)}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="text-slate-300 text-sm">{formatDate(video.sealed_at)}</span>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex items-center gap-2">
+                                                    <code className="text-xs text-primary bg-primary/10 px-2 py-1 rounded font-mono">
+                                                        {video.credential_id.slice(0, 20)}...
+                                                    </code>
+                                                    <button 
+                                                        onClick={() => copyToClipboard(video.credential_id)}
+                                                        className="opacity-0 group-hover:opacity-100 transition-opacity text-slate-500 hover:text-white"
+                                                    >
+                                                        <Copy className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <span className="inline-flex items-center gap-1.5 rounded-full bg-vca-success/10 px-2.5 py-1 text-xs font-medium text-vca-success border border-vca-success/20">
+                                                    <Verified className="w-3.5 h-3.5" />
+                                                    Sealed
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-right">
+                                                <button 
+                                                    onClick={() => downloadManifest(video)}
+                                                    className="text-slate-400 hover:text-primary transition-colors p-2 rounded hover:bg-primary/10"
+                                                    title="Download Manifest"
+                                                >
+                                                    <FileText className="w-5 h-5" />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
             </div>
         </>
     )

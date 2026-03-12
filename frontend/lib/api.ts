@@ -124,3 +124,14 @@ export async function getVideoByCredential(credentialId: string) {
     }
     return res.json();
 }
+
+/**
+ * List all signed videos for dashboard
+ */
+export async function listVideos(limit: number = 50, offset: number = 0) {
+    const res = await fetch(`${API_BASE_URL}/videos?limit=${limit}&offset=${offset}`);
+    if (!res.ok) {
+        throw new Error(`Failed to list videos: ${res.statusText}`);
+    }
+    return res.json(); // Returns { videos, total, limit, offset }
+}

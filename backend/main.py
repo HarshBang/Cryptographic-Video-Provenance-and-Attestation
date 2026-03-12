@@ -30,6 +30,7 @@ from core.database import (
     find_video_by_phash,
     find_video_by_sha256,
     get_video_by_credential_id,
+    list_videos,
     create_processing_job,
     update_processing_job,
     get_processing_status,
@@ -598,6 +599,17 @@ def get_video_by_credential(credential_id: str):
     if not video:
         raise HTTPException(status_code=404, detail="Video not found")
     return video
+
+@app.get("/api/videos")
+def get_videos(limit: int = 50, offset: int = 0):
+    """List all signed videos for dashboard - Phase 2"""
+    videos = list_videos(limit=limit, offset=offset)
+    return {
+        "videos": videos,
+        "total": len(videos),
+        "limit": limit,
+        "offset": offset
+    }
 
 @app.get("/api/health")
 def health_check():
