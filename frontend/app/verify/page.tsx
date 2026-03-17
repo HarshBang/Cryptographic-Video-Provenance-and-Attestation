@@ -54,7 +54,7 @@ export default function VerifyPage() {
                 <div className="max-w-[1200px] mx-auto px-6 h-16 flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2">
                         <Shield className="w-6 h-6 text-primary" />
-                        <span className="font-bold text-white text-lg">Provenance Verify</span>
+                        <span className="font-bold text-white text-lg">CVPA Verify</span>
                     </Link>
                     <div className="flex gap-4">
                         <Link href="/dashboard" className="text-sm font-medium text-slate-400 hover:text-white transition-colors">Creator Login</Link>
@@ -126,7 +126,7 @@ export default function VerifyPage() {
                                 <p className="text-slate-300 mt-2">
                                     {resultType === "verified" && "This video is an exact match to the creator's original signature."}
                                     {resultType === "warning" && "Visual content matches, but the file structure differs (e.g. re-encoding)."}
-                                    {resultType === "unknown" && "This video has not been signed by the VCA system."}
+                                    {resultType === "unknown" && "This video has not been signed by the CVPA system."}
                                     {resultType === "error" && "Could not process the video file."}
                                 </p>
                             </div>

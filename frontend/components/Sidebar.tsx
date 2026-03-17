@@ -25,7 +25,7 @@ export function Sidebar() {
                     <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">AC</div>
                 </div>
                 <div>
-                    <h1 className="text-white text-base font-bold leading-tight tracking-tight">Provenance</h1>
+                    <h1 className="text-white text-base font-bold leading-tight tracking-tight">CVPA</h1>
                     <p className="text-slate-400 text-xs font-medium">Creator Suite</p>
                 </div>
             </div>

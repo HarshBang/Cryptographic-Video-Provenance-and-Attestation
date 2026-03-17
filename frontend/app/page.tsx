@@ -6,7 +6,7 @@ export default function Home() {
     <div className="flex flex-col items-center justify-center min-h-screen bg-[#101622] text-white p-6">
       <div className="flex items-center gap-3 mb-8">
         <ShieldCheck className="w-12 h-12 text-[#135bec]" />
-        <h1 className="text-4xl font-bold tracking-tighter">VCA System</h1>
+        <h1 className="text-4xl font-bold tracking-tighter">CVPA System</h1>
       </div>
 
       <div className="max-w-md text-center space-y-6">
@@ -31,7 +31,7 @@ export default function Home() {
       </div>
 
       <footer className="mt-20 text-xs text-[#64748b]">
-        Project Blueprint v1.0 • Built with Next.js & FastAPI
+        CVPA v1.0 • Built with Next.js & FastAPI
       </footer>
     </div>
   );

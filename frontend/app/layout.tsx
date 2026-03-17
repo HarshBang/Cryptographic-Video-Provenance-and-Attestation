@@ -13,8 +13,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "VCA | Creator Provenance Suite",
-  description: "Cryptographic Video Authentication System",
+  title: "CVPA | Creator Provenance Suite",
+  description: "Cryptographic Video Provenance & Attestation System",
 };
 
 export default function RootLayout({
