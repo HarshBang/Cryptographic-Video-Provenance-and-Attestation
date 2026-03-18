@@ -1,4 +1,4 @@
-# CVPA: Cryptographic Video Provenance & Attestation System
+# CVPA: Cryptographic Video Provenance & Attestation
 ![Frontend](https://img.shields.io/badge/Frontend-UI%20Layer-blue?style=for-the-badge)
 ![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
@@ -278,3 +278,19 @@ Sufficient for the current scope. The schema is designed to migrate to PostgreSQ
 | PDF certificate export | Complete |
 | Cloud storage | Not started |
 | Key recovery mechanism | Not started |
+
+## About Me
+I am a passionate student at NMIMS School of Technology Management and Engineering, persuing Computer Science Engineering specializing in Data Science.
+CVPA reflects my drive to solve real-world societal challenges, particularly in the public safety and law enforcement space, through technology that can have real impact in the field.
+
+This project combines my interests in Cryptogrpahy, backend development, and cloud infrastructure to address critical gaps in video provenance.
+
+
+## Contact Information
+Feel free to connect for collaborations, feedback, or inquiries:
+
+- **Email:** harshbang10@gmail.com 
+- **LinkedIn:** [Harsh-Bang](https://www.linkedin.com/in/harshbang/)
+
+
+**License:** All rights reserved. The code is intended solely for academic purposes.  
