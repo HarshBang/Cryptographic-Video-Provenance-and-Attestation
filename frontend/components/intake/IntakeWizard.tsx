@@ -5,8 +5,6 @@ import { Upload, Check, Loader2, Lock, ShieldCheck, FileVideo, RefreshCw, CheckC
 import { cn } from "@/lib/utils"
 import { TerminalLog } from "./TerminalLog"
 import { ManifestPreview } from "./ManifestPreview"
-import nacl from "tweetnacl"
-import * as util from "tweetnacl-util"
 
 // Phase 2 - Log Entry Interface
 interface LogEntry {
@@ -17,34 +15,24 @@ interface LogEntry {
 }
 
 const STARTUP_LOGS: LogEntry[] = [
-    { id: "1", timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }), message: "Phase 2 Client-Side Signing Ready", type: "success" },
+    { id: "1", timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }), message: "System Defaulted to Custodial Signing", type: "success" },
     { id: "2", timestamp: new Date().toLocaleTimeString('en-US', { hour12: false }), message: "Waiting for video upload...", type: "info" },
 ]
 
-// Phase 2 - Keypair from Identity Page (passed via props or context)
-interface KeyPair {
-    publicKey: string
-    privateKey: string
-}
-
 interface IntakeWizardProps {
-    keyPair?: KeyPair | null
+    hasIdentity: boolean;
 }
 
-export function IntakeWizard({ keyPair }: IntakeWizardProps) {
+export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
     const [step, setStep] = useState(1) // 1: Upload, 2: Processing, 3: Seal
     const [file, setFile] = useState<File | null>(null)
     const [taskId, setTaskId] = useState<string | null>(null)
     const [progress, setProgress] = useState({ hash: 0, frames: 0, phash: 0 })
     const [logs, setLogs] = useState<LogEntry[]>(STARTUP_LOGS)
     const [manifest, setManifest] = useState<any>(null)
-    const [canonicalManifest, setCanonicalManifest] = useState<string | null>(null)
     const [manifestHash, setManifestHash] = useState<string | null>(null)
     const [signing, setSigning] = useState(false)
     const [signatureResult, setSignatureResult] = useState<any>(null)
-
-    // Phase 2: No auto-identity generation - must be provided from Identity page
-    const hasIdentity = !!keyPair
 
     const addLog = (msg: string, type: "info" | "process" | "success" | "error" | "warning" = "info") => {
         setLogs(prev => [...prev, {
@@ -101,7 +89,6 @@ export function IntakeWizard({ keyPair }: IntakeWizardProps) {
                             addLog(`Manifest hash: ${status.result?.manifest_hash?.substring(0, 16)}...`, "info")
                             
                             // Store manifest data for signing
-                            setCanonicalManifest(status.result?.canonical_manifest)
                             setManifestHash(status.result?.manifest_hash)
                             setManifest({
                                 status: "ready_to_sign",
@@ -172,51 +159,33 @@ export function IntakeWizard({ keyPair }: IntakeWizardProps) {
     }
 
     /**
-     * Phase 2 - Client-Side Signing
-     * Signs the canonical manifest in the browser using tweetnacl
-     * Private key NEVER leaves the browser
+     * Phase 2 - Custodial Backend Signing
+     * Instructs the backend to finalize the signature using the user's stored private key.
      */
     const handleSign = async () => {
-        if (!taskId || !keyPair || !canonicalManifest) {
+        if (!taskId) {
             addLog("Missing required data for signing", "error")
             return
         }
 
         setSigning(true)
-        addLog("Starting client-side signing with Ed25519...", "process")
+        addLog("Requesting backend signature generation...", "process")
 
         try {
-            // Step 1: Convert canonical manifest to bytes
-            const messageBytes = util.decodeUTF8(canonicalManifest)
-            addLog("Canonical manifest encoded to UTF-8", "info")
-
-            // Step 2: Decode private key from base64
-            const secretKeyBytes = util.decodeBase64(keyPair.privateKey)
-            addLog("Private key decoded", "info")
-
-            // Step 3: Sign using tweetnacl
-            const signature = nacl.sign.detached(messageBytes, secretKeyBytes)
-            const signatureBase64 = util.encodeBase64(signature)
-            addLog(`Signature generated: ${signatureBase64.substring(0, 32)}...`, "success")
-
-            // Step 4: Send signature to backend for verification and storage
-            addLog("Sending signature to backend for verification...", "process")
             const { finalizeSignature } = await import("../../lib/api")
-            const res = await finalizeSignature(taskId, signatureBase64, keyPair.publicKey)
+            const res = await finalizeSignature(taskId)
 
             // Step 5: Display results
             setSignatureResult({
                 credential_id: res.credential_id,
                 manifest_hash: res.manifest_hash,
-                signature: signatureBase64,
                 signature_valid: res.signature_valid,
-                public_key: keyPair.publicKey,
                 key_fingerprint: res.manifest?.identity?.key_fingerprint
             })
 
             setManifest(res.manifest)
             
-            addLog(`✓ Signature verified by backend`, "success")
+            addLog(`✓ Signature generated by backend`, "success")
             addLog(`✓ Credential ID: ${res.credential_id}`, "success")
             addLog(`✓ Manifest Hash: ${res.manifest_hash?.substring(0, 16)}...`, "success")
             addLog("Evidence Pack sealed and ready!", "success")
@@ -329,13 +298,13 @@ export function IntakeWizard({ keyPair }: IntakeWizardProps) {
                                     <ShieldCheck className="w-5 h-5 text-slate-400" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-white">Client-Side Signing</p>
-                                    <p className="text-xs text-slate-500">Ed25519 • Private key never leaves browser</p>
+                                    <p className="text-sm font-bold text-white">Custodial Signing</p>
+                                    <p className="text-xs text-slate-500">Ed25519 • Secure Automatic Key Management</p>
                                 </div>
                             </div>
                             
-                            {/* Phase 2: Show key fingerprint if available */}
-                            {keyPair && (
+                            {/* Show key fingerprint if available (now managed by backend) */}
+                            {hasIdentity && (
                                 <div className="p-3 bg-slate-800/50 rounded-lg">
                                     <div className="flex items-center gap-2 text-xs text-slate-400">
                                         <Fingerprint className="w-3 h-3" />

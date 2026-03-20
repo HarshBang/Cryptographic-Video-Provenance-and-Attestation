@@ -1,4 +1,25 @@
 import { API_BASE_URL } from "./config";
+import { userPool } from "./cognito";
+
+async function getAuthToken(): Promise<string | null> {
+    const cogUser = userPool.getCurrentUser();
+    if (!cogUser) return null;
+    return new Promise((resolve) => {
+        cogUser.getSession((err: any, session: any) => {
+            if (err || !session.isValid()) {
+                resolve(null);
+                return;
+            }
+            resolve(session.getIdToken().getJwtToken());
+        });
+    });
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+    const token = await getAuthToken();
+    if (!token) return {};
+    return { "Authorization": `Bearer ${token}` };
+}
 
 // Phase 2 API - Client-Side Signing Architecture
 
@@ -10,8 +31,10 @@ export async function uploadVideo(file: File) {
     console.log("Uploading to:", url);
 
     try {
+        const headers: any = await getAuthHeaders();
         const res = await fetch(url, {
             method: "POST",
+            headers,
             body: formData,
         });
 
@@ -31,7 +54,8 @@ export async function uploadVideo(file: File) {
 }
 
 export async function pollStatus(taskId: string) {
-    const res = await fetch(`${API_BASE_URL}/intake/status/${taskId}`);
+    const headers: any = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/intake/status/${taskId}`, { headers });
     if (!res.ok) {
         throw new Error(`Status check failed: ${res.statusText}`);
     }
@@ -39,23 +63,15 @@ export async function pollStatus(taskId: string) {
 }
 
 /**
- * Phase 2 - Finalize signature with client-side generated signature
- * This replaces the old signManifest which sent private key to server
+ * Phase 2 - Finalize signature (Custodial Backend Signing)
  */
-export async function finalizeSignature(
-    taskId: string, 
-    signature: string, 
-    publicKey: string, 
-    creatorName?: string
-) {
+export async function finalizeSignature(taskId: string) {
+    const authHeaders = await getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/intake/finalize-signature`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({
-            task_id: taskId,
-            signature: signature,
-            public_key: publicKey,
-            creator_name: creatorName
+            task_id: taskId
         }),
     });
 
@@ -68,7 +84,21 @@ export async function finalizeSignature(
 }
 
 /**
- * Phase 2 - Register a client-generated public key
+ * Phase 2 - Custodial Identity Fetching
+ * Retrieves or generates the user's backend-managed keypair
+ */
+export async function getMyIdentity() {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/identity/me`, { headers: authHeaders });
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to get identity: ${res.status} ${res.statusText} - ${errorText}`);
+    }
+    return res.json();
+}
+
+/**
+ * @deprecated Phase 1 - Register a client-generated public key
  * Use this after generating keys with tweetnacl in the browser
  */
 export async function registerIdentity(publicKey: string, displayName?: string) {
@@ -118,7 +148,8 @@ export async function verifyVideo(file: File) {
  * Get video details by credential ID
  */
 export async function getVideoByCredential(credentialId: string) {
-    const res = await fetch(`${API_BASE_URL}/videos/${credentialId}`);
+    const headers: any = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/videos/${credentialId}`, { headers });
     if (!res.ok) {
         throw new Error(`Failed to get video: ${res.statusText}`);
     }
@@ -129,7 +160,8 @@ export async function getVideoByCredential(credentialId: string) {
  * List all signed videos for dashboard
  */
 export async function listVideos(limit: number = 50, offset: number = 0) {
-    const res = await fetch(`${API_BASE_URL}/videos?limit=${limit}&offset=${offset}`);
+    const headers: any = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/videos?limit=${limit}&offset=${offset}`, { headers });
     if (!res.ok) {
         throw new Error(`Failed to list videos: ${res.statusText}`);
     }

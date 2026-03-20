@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, Dict, List
 from pydantic import BaseModel
@@ -18,13 +18,16 @@ from core.signing import (
     generate_manifest, 
     canonical_json_encode,
     compute_manifest_hash,
+    sign_message,
     verify_manifest_signature,
     verify_stored_signature,
     verify_signature_detached
 )
+from core.auth import get_current_user
 from core.database import (
     init_db, 
     create_creator,
+    get_creator,
     save_video_record, 
     find_video_by_hash, 
     find_video_by_phash,
@@ -83,9 +86,6 @@ class StatusResponse(BaseModel):
 
 class FinalizeSignatureRequest(BaseModel):
     task_id: str
-    signature: str
-    public_key: str
-    creator_name: Optional[str] = None
 
 class FinalizeSignatureResponse(BaseModel):
     credential_id: str
@@ -355,14 +355,14 @@ def get_status(task_id: str):
     raise HTTPException(status_code=404, detail="Task not found")
 
 @app.post("/api/intake/finalize-signature", response_model=FinalizeSignatureResponse)
-def finalize_signature(req: FinalizeSignatureRequest):
+def finalize_signature(req: FinalizeSignatureRequest, current_user: dict = Depends(get_current_user)):
     """
-    Phase 2 - Finalize Video Signature (Client-Side Signing)
+    Phase 2 - Finalize Video Signature (Backend Custodial Signing)
     
-    This endpoint receives the client-generated signature and verifies it:
-    - Receives signature from browser (tweetnacl)
-    - Verifies signature against stored canonical manifest
-    - Creates/updates creator identity
+    This endpoint retrieves the user's stored private key and signs the manifest:
+    - Verifies task completion
+    - Fetches the creator profile (private key)
+    - Generates the signature locally on the backend
     - Stores signature, public_key, key_fingerprint, sealed_at
     """
     task_id = req.task_id
@@ -381,24 +381,15 @@ def finalize_signature(req: FinalizeSignatureRequest):
     if not credential_id:
         raise HTTPException(status_code=500, detail="Credential ID not found in task result")
     
-    # Get canonical manifest and re-generate for verification
-    canonical_manifest = result.get("canonical_manifest")
     manifest_hash = result.get("manifest_hash")
     
-    if not canonical_manifest:
-        raise HTTPException(status_code=500, detail="Canonical manifest not found")
-    
-    # Verify the signature against the exact canonical manifest string
-    # The frontend signed the canonical JSON string, so we verify against that directly
-    message_bytes = canonical_manifest.encode('utf-8')
-    is_valid = verify_signature_detached(message_bytes, req.signature, req.public_key)
-    
-    if not is_valid:
-        logger.error(f"Signature verification failed for task {task_id}")
-        raise HTTPException(status_code=400, detail="Signature verification failed")
-    
-    # Create or get creator identity
-    creator_id = create_creator(req.public_key, req.creator_name)
+    # Fetch creator identity
+    creator = get_creator(current_user["id"])
+    if not creator or not creator.get("private_key"):
+        raise HTTPException(status_code=400, detail="Creator identity not found or private key missing. Call /api/identity/me first.")
+        
+    public_key = creator["public_key"]
+    private_key = creator["private_key"]
     
     # Regenerate manifest with actual public key
     asset_info = {
@@ -409,21 +400,27 @@ def finalize_signature(req: FinalizeSignatureRequest):
     }
     
     manifest = generate_manifest(
-        creator_public_key=req.public_key,
+        creator_public_key=public_key,
         asset_info=asset_info,
         phash_sequence=result["phash_sequence"],
         manifest_hash=manifest_hash
     )
-    manifest["signature"] = req.signature
+    
+    # Sign the canonical manifest
+    message = canonical_json_encode(manifest)
+    message_bytes = message.encode('utf-8')
+    signature = sign_message(message_bytes, private_key)
+    
+    manifest["signature"] = signature
     
     # Finalize the video record
     success = finalize_video_signature(
         credential_id=credential_id,
-        creator_id=creator_id,
+        creator_id=creator["id"],
         manifest=manifest,
         manifest_hash=manifest_hash,
-        signature=req.signature,
-        public_key=req.public_key
+        signature=signature,
+        public_key=public_key
     )
     
     if not success:
@@ -536,60 +533,31 @@ async def verify_video(file: UploadFile = File(...)):
         if temp_path.exists():
             os.remove(temp_path)
 
-@app.get("/api/identity/generate", response_model=IdentityResponse)
-def create_identity():
+@app.get("/api/identity/me")
+def get_my_identity(current_user: dict = Depends(get_current_user)):
     """
-    Phase 2 - Identity Layer: Generate Ed25519 key pair for creator
-    
-    Creates a new cryptographic identity for content creators.
-    NOTE: In Phase 2, private keys are generated CLIENT-SIDE using tweetnacl.
-    This endpoint only returns the public components after client registration.
-    
-    For server-side key generation (deprecated in Phase 2):
-    - Use only for testing/development
-    - Private key should be transferred securely to client
+    Phase 2 - Custodial Identity Initialization
+    Checks if the user has a keypair. If not, generates one.
+    Returns the public identity details.
     """
-    private_key, public_key = generate_key_pair()
-    key_fingerprint = compute_key_fingerprint(public_key)
+    creator = get_creator(current_user["id"])
     
-    # Create creator record in database
-    creator_id = create_creator(public_key)
-    
-    logger.info(f"Generated new creator identity: {creator_id[:8]}... fingerprint: {key_fingerprint[:16]}...")
-    
-    # Phase 2: Return public components only
-    # Client should use tweetnacl for key generation in production
-    return IdentityResponse(
-        public_key=public_key,
-        creator_id=creator_id,
-        key_fingerprint=key_fingerprint
-    )
-
-class RegisterIdentityRequest(BaseModel):
-    public_key: str
-    display_name: Optional[str] = None
-
-@app.post("/api/identity/register")
-def register_identity(req: RegisterIdentityRequest):
-    """
-    Phase 2 - Register a client-generated public key
-    
-    Client generates keypair using tweetnacl:
-    - const keypair = nacl.sign.keyPair()
-    - Send publicKey (base64) to this endpoint
-    """
-    if not req.public_key or len(req.public_key) < 32:
-        raise HTTPException(status_code=400, detail="Invalid public key")
-    
-    key_fingerprint = compute_key_fingerprint(req.public_key)
-    creator_id = create_creator(req.public_key, req.display_name)
-    
-    logger.info(f"Registered client identity: {creator_id[:8]}... fingerprint: {key_fingerprint[:16]}...")
-    
+    if not creator:
+        private_key, public_key = generate_key_pair()
+        create_creator(
+            public_key=public_key, 
+            private_key=private_key, 
+            display_name=current_user["name"], 
+            explicit_id=current_user["id"]
+        )
+        creator = get_creator(current_user["id"])
+        logger.info(f"Provisioned new keypair for {current_user['email']}")
+        
     return {
-        "creator_id": creator_id,
-        "key_fingerprint": key_fingerprint,
-        "status": "registered"
+        "creator_id": creator["id"],
+        "public_key": creator["public_key"],
+        "key_fingerprint": creator["key_fingerprint"],
+        "display_name": creator["display_name"]
     }
 
 @app.get("/api/videos/{credential_id}")
@@ -601,9 +569,9 @@ def get_video_by_credential(credential_id: str):
     return video
 
 @app.get("/api/videos")
-def get_videos(limit: int = 50, offset: int = 0):
+def get_videos(limit: int = 50, offset: int = 0, current_user: dict = Depends(get_current_user)):
     """List all signed videos for dashboard - Phase 2"""
-    videos = list_videos(limit=limit, offset=offset)
+    videos = list_videos(creator_id=current_user["id"], limit=limit, offset=offset)
     return {
         "videos": videos,
         "total": len(videos),

@@ -1,9 +1,10 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { LayoutDashboard, Video, Fingerprint, Activity, Settings, Zap } from "lucide-react" // Using Lucide as modern replacement for Material Symbols
+import { useRouter, usePathname } from "next/navigation"
+import { LayoutDashboard, Video, Fingerprint, Activity, Settings, Zap, LogOut } from "lucide-react" // Using Lucide as modern replacement for Material Symbols
 import { cn } from "@/lib/utils"
+import { userPool } from "@/lib/cognito"
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -15,6 +16,15 @@ const navigation = [
 
 export function Sidebar() {
     const pathname = usePathname()
+    const router = useRouter()
+
+    const handleLogout = () => {
+        const user = userPool.getCurrentUser()
+        if (user) {
+            user.signOut()
+        }
+        router.push('/login')
+    }
 
     return (
         <aside className="w-64 flex-shrink-0 flex flex-col border-r border-[#2a3649] bg-[#111722] transition-all duration-300 h-screen fixed left-0 top-0 z-50">
@@ -80,6 +90,14 @@ export function Sidebar() {
                     <Settings className="h-5 w-5 group-hover:rotate-90 transition-transform duration-500" />
                     <p className="text-sm font-medium">Settings</p>
                 </Link>
+
+                <button
+                    onClick={handleLogout}
+                    className="flex items-center gap-3 px-3 py-2 mt-2 w-full text-left rounded-lg hover:bg-red-500/10 transition-colors group text-slate-400 hover:text-red-400"
+                >
+                    <LogOut className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
+                    <p className="text-sm font-medium">Log out</p>
+                </button>
             </div>
         </aside>
     )

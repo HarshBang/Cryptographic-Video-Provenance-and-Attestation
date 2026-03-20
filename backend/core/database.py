@@ -29,6 +29,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS creators (
                  id TEXT PRIMARY KEY,
                  public_key TEXT UNIQUE NOT NULL,
+                 private_key TEXT,
                  key_fingerprint TEXT UNIQUE NOT NULL,
                  display_name TEXT,
                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -119,6 +120,13 @@ def _migrate_database():
     c.execute("PRAGMA table_info(creators)")
     existing_creator_columns = [row[1] for row in c.fetchall()]
     
+    if 'private_key' not in existing_creator_columns:
+        try:
+            c.execute("ALTER TABLE creators ADD COLUMN private_key TEXT")
+            print("Added column: creators.private_key")
+        except sqlite3.OperationalError as e:
+            print(f"Column private_key issue: {e}")
+            
     if 'key_fingerprint' not in existing_creator_columns:
         try:
             # Add without UNIQUE constraint first, then update existing rows
@@ -184,30 +192,50 @@ def compute_key_fingerprint(public_key: str) -> str:
     """Compute SHA-256 fingerprint of public key"""
     return hashlib.sha256(public_key.encode('utf-8')).hexdigest()
 
-def create_creator(public_key: str, display_name: Optional[str] = None) -> str:
+def create_creator(public_key: str, display_name: Optional[str] = None, explicit_id: Optional[str] = None, private_key: Optional[str] = None) -> str:
     """Create a new creator identity and return creator ID"""
-    creator_id = str(uuid.uuid4())
+    creator_id = explicit_id if explicit_id else str(uuid.uuid4())
     key_fingerprint = compute_key_fingerprint(public_key)
     conn = get_db_connection()
     c = conn.cursor()
     
     try:
-        c.execute("INSERT INTO creators (id, public_key, key_fingerprint, display_name) VALUES (?, ?, ?, ?)", 
-                  (creator_id, public_key, key_fingerprint, display_name))
+        c.execute("INSERT INTO creators (id, public_key, private_key, key_fingerprint, display_name) VALUES (?, ?, ?, ?, ?)", 
+                  (creator_id, public_key, private_key, key_fingerprint, display_name))
         conn.commit()
         logger.info(f"Created new creator: {creator_id} with fingerprint: {key_fingerprint[:16]}...")
         return creator_id
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed" in str(e):
             # Creator already exists, get their ID
-            c.execute("SELECT id FROM creators WHERE public_key = ? OR key_fingerprint = ?", (public_key, key_fingerprint))
+            c.execute("SELECT id FROM creators WHERE public_key = ? OR key_fingerprint = ? OR id = ?", (public_key, key_fingerprint, creator_id))
             row = c.fetchone()
             if row:
                 logger.info(f"Creator already exists: {row[0]}")
+                if display_name:
+                    c.execute("UPDATE creators SET display_name = ? WHERE id = ?", (display_name, row[0]))
+                    conn.commit()
                 return row[0]
         raise
     finally:
         conn.close()
+
+def get_creator(creator_id: str) -> Optional[Dict]:
+    """Retrieve creator details, including private key"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, public_key, private_key, key_fingerprint, display_name FROM creators WHERE id = ?", (creator_id,))
+    row = c.fetchone()
+    conn.close()
+    if row:
+        return {
+            "id": row[0],
+            "public_key": row[1],
+            "private_key": row[2],
+            "key_fingerprint": row[3],
+            "display_name": row[4]
+        }
+    return None
 
 def save_video_record(
     creator_id: str, 
@@ -442,18 +470,27 @@ def find_video_by_phash(phash: str, phash_sequence: List[str] = None, threshold:
     matches.sort(key=lambda x: x["distance"])
     return matches
 
-def list_videos(limit: int = 50, offset: int = 0) -> List[Dict]:
+def list_videos(creator_id: str = None, limit: int = 50, offset: int = 0) -> List[Dict]:
     """List all signed videos for dashboard - Phase 2"""
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("""SELECT v.id, v.filename, v.file_size, v.sha256, v.credential_id, 
-                        v.manifest, v.manifest_hash, v.signature, v.public_key, 
-                        v.key_fingerprint, v.sealed_at, v.created_at, c.display_name
-                 FROM videos v
-                 LEFT JOIN creators c ON v.creator_id = c.id
-                 WHERE v.status = 'sealed'
-                 ORDER BY v.sealed_at DESC
-                 LIMIT ? OFFSET ?""", (limit, offset))
+    
+    query = """SELECT v.id, v.filename, v.file_size, v.sha256, v.credential_id, 
+                      v.manifest, v.manifest_hash, v.signature, v.public_key, 
+                      v.key_fingerprint, v.sealed_at, v.created_at, c.display_name
+               FROM videos v
+               LEFT JOIN creators c ON v.creator_id = c.id
+               WHERE v.status = 'sealed'"""
+               
+    params = []
+    if creator_id:
+        query += " AND v.creator_id = ?"
+        params.append(creator_id)
+        
+    query += " ORDER BY v.sealed_at DESC LIMIT ? OFFSET ?"
+    params.extend([limit, offset])
+    
+    c.execute(query, tuple(params))
     rows = c.fetchall()
     conn.close()
     
