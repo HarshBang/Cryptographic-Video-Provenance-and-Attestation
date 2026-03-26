@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>CVPA Authenticator</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="amazon-cognito-identity.min.js"></script>
+  <script src="jspdf.umd.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="logo">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+        </svg>
+      </div>
+      <div>
+        <h1>CVPA System</h1>
+      </div>
+    </div>
+
+    <!-- Results View (Injected dynamically below header if a result exists) -->
+    <div id="results-view" class="hidden mb-4">
+      <div id="result-card" class="result-card">
+        <div class="result-header">
+          <div class="result-icon-box" id="result-icon-box">
+             <!-- Icon generated in JS -->
+          </div>
+          <h3 id="result-title" class="m-0 text-white font-medium"></h3>
+        </div>
+        <p id="result-message" class="text-sm text-slate-300 mt-2 mb-3 leading-relaxed"></p>
+        
+        <div id="result-actions" class="result-actions hidden">
+          <button id="btn-download-manifest" class="btn secondary outline-sm flex-1">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            Manifest
+          </button>
+          <button id="btn-download-pdf" class="btn primary outline-sm flex-1">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            Certificate
+          </button>
+        </div>
+        <button id="btn-dismiss-result" class="btn outline small mt-3 w-full">Dismiss Result</button>
+      </div>
+    </div>
+
+    <!-- Login View -->
+    <div id="view-login" style="display: none;">
+      <p class="description block mb-4">Please log in to sign videos securely.</p>
+      <div class="error-msg text-red-400 text-sm mb-3 hidden" id="login-error"></div>
+      
+      <form id="login-form">
+        <div class="input-group">
+          <label>Email Address</label>
+          <input type="email" id="email" required placeholder="name@company.com" />
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" id="password" required placeholder="••••••••" />
+        </div>
+        <button type="submit" id="btn-login" class="btn primary mb-3">Sign In</button>
+      </form>
+
+      <div class="divider"><span>Or</span></div>
+      <button id="btn-register" class="btn secondary">Create Account</button>
+    </div>
+
+    <!-- Main View -->
+    <div id="view-main" style="display: none;">
+      <div class="status-card">
+        <div class="status-indicator active"></div>
+        <div style="flex: 1">
+           <p class="font-medium text-slate-200 m-0">Extension is Active</p>
+           <p class="text-xs text-slate-400 truncate m-0" id="user-email-display"></p>
+        </div>
+        <button id="btn-logout" class="icon-btn" title="Logout">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+            <polyline points="16 17 21 12 16 7"></polyline>
+            <line x1="21" y1="12" x2="9" y2="12"></line>
+          </svg>
+        </button>
+      </div>
+
+      <p class="description">
+        Right-click any HTML5 video on the web to quickly verify or upload. Or upload directly here.
+      </p>
+
+      <div id="drop-zone" class="drop-zone">
+        <svg class="upload-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+        </svg>
+        <p class="m-0 text-sm text-slate-300 font-medium pb-2">Drag & Drop video here</p>
+        <button id="btn-browse" class="btn secondary select-btn">Browse Files</button>
+        <input type="file" id="file-input" accept="video/*" style="display: none;" />
+      </div>
+
+      <div id="upload-status" class="hidden mt-3 text-center text-sm font-medium"></div>
+
+      <div class="actions mt-5">
+        <button id="btn-dashboard" class="btn primary" style="background: linear-gradient(to right, #0ea5e9, #3b82f6)">Open Dashboard</button>
+        <button id="btn-verify-page" class="btn secondary">Public Verifier</button>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

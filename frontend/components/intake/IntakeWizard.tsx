@@ -43,6 +43,19 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
         }])
     }
 
+    // Support resuming an existing task (e.g., from the browser extension)
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const urlTaskId = params.get('taskId')
+        if (urlTaskId) {
+            setTaskId(urlTaskId)
+            setStep(2)
+            addLog(`Resuming processing for Task ID: ${urlTaskId.substring(0, 8)}...`, "info")
+            // Clean up the URL
+            window.history.replaceState({}, '', window.location.pathname)
+        }
+    }, [])
+
     // Step 2: Processing Logic (Polling) - Phase 2 Enhanced
     useEffect(() => {
         if (step === 2 && taskId) {
