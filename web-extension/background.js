@@ -5,27 +5,43 @@ const FRONTEND_URL = "http://localhost:3000";
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
     id: "cvpa-verify",
-    title: "CVPA: Verify Video Authenticity",
+    title: "CVPA: Verify Specific Video File",
     contexts: ["video", "link"]
   });
 
   chrome.contextMenus.create({
+    id: "cvpa-verify-page",
+    title: "CVPA: Verify Page Video (YouTube/LinkedIn)",
+    contexts: ["page"]
+  });
+
+  chrome.contextMenus.create({
     id: "cvpa-upload",
-    title: "CVPA: Upload & Sign Video",
+    title: "CVPA: Upload & Sign Video File",
     contexts: ["video", "link"]
   });
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === "cvpa-verify-page") {
+    let pageUrl = info.pageUrl;
+    if (pageUrl) {
+      handleVerifyUrl(pageUrl);
+    } else {
+      notifyPopup("error", "Error", "Could not capture the page URL.");
+    }
+    return;
+  }
+
   let videoUrl = info.srcUrl || info.linkUrl;
 
   if (!videoUrl) {
-    notifyPopup("error", "Error", "Could not determine video URL.");
+    notifyPopup("error", "Error", "Could not determine video file location.");
     return;
   }
 
   if (videoUrl.startsWith('blob:')) {
-    notifyPopup("error", "Unsupported", "Blob URLs are currently not supported due to browser security. Please use direct links.");
+    notifyPopup("error", "Unsupported", "Blob URLs are unsupported. Right-click the page background and select 'Verify Page Video' instead.");
     return;
   }
 
@@ -68,6 +84,38 @@ async function handleVerify(videoUrl) {
   } catch (error) {
     console.error("Verification error:", error);
     notifyPopup("error", "Verification Failed", "Network error. See background console.");
+  }
+}
+
+async function handleVerifyUrl(url) {
+  notifyPopup("loading", "Extracting Stream", "Connecting to social media server to verify video stream...");
+
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/verify/url`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ url: url })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      if (result.status === "verified" || result.status === "warning") {
+        const type = result.status === "verified" ? "success" : "warning";
+        const msg = result.message || `Verified (${result.match_type})`;
+        const creator = result.creator_info ? result.creator_info.name || 'Creator' : 'Unknown';
+        notifyPopup(type, "Verification Complete", `${msg} | Signed by ${creator}`, result.credential_id);
+      } else {
+        notifyPopup("error", "Unverified", result.message || "Video stream is not authenticated.");
+      }
+    } else {
+      notifyPopup("error", "Verification Failed", `Error: ${result.detail || 'Internal Error'}`);
+    }
+  } catch (error) {
+    console.error("URL Verification error:", error);
+    notifyPopup("error", "Verification Failed", "Network error computing social stream.");
   }
 }
 

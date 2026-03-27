@@ -99,6 +99,9 @@ class FinalizeSignatureResponse(BaseModel):
     signature_valid: bool
     status: str
 
+class VerifyUrlRequest(BaseModel):
+    url: str
+
 class VerifyResponse(BaseModel):
     status: str
     match_type: str
@@ -540,6 +543,112 @@ async def verify_video(file: UploadFile = File(...)):
         # Cleanup temporary file
         if temp_path.exists():
             os.remove(temp_path)
+
+@app.post("/api/verify/url", response_model=VerifyResponse)
+async def verify_video_url(req: VerifyUrlRequest):
+    """
+    Phase 2 - Social Media Authenticator (URL Verification)
+    Downloads streaming video from URL using yt-dlp, runs verification, and cleans up.
+    """
+    url = req.url
+    if not url:
+        raise HTTPException(status_code=400, detail="No URL provided")
+        
+    import yt_dlp
+    
+    # Generate unique temp filename template for yt_dlp
+    temp_filename = f"verify_url_{uuid.uuid4()}"
+    temp_path_template = UPLOAD_DIR / f"{temp_filename}.%(ext)s"
+    
+    ydl_opts = {
+        'outtmpl': str(temp_path_template),
+        # Use only pre-merged formats to avoid requiring ffmpeg on the host system
+        'format': 'best[ext=mp4]/best',
+        'noplaylist': True,
+        'quiet': True,
+        'no_warnings': True,
+    }
+    
+    downloaded_file = None
+    
+    try:
+        logger.info(f"Downloading streaming video from {url} for verification...")
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            downloaded_file = Path(ydl.prepare_filename(info))
+            # On some platforms the file extension changes (e.g. .webm to .mkv), so we probe what yt_dlp actually produced
+            if not downloaded_file.exists():
+                # Try to find the file that starts with temp_filename
+                matches = list(UPLOAD_DIR.glob(f"{temp_filename}.*"))
+                if matches:
+                    downloaded_file = matches[0]
+                else:
+                    raise Exception("yt-dlp failed to produce an output file")
+            
+        logger.info(f"Downloaded stream to {downloaded_file}. Running dual-verification engine...")
+        
+        # 1. Hard Binding - Exact SHA-256 Match
+        sha256 = calculate_sha256(str(downloaded_file))
+        exact_match = find_video_by_hash(sha256)
+        
+        if exact_match:
+            logger.info(f"Exact match found: {exact_match['credential_id']}")
+            signature_valid = verify_stored_signature(exact_match)
+            return VerifyResponse(
+                status="verified",
+                match_type="exact",
+                credential_id=exact_match["credential_id"],
+                creator_info={
+                    "public_key": exact_match.get("public_key"),
+                    "name": exact_match.get("creator_name")
+                },
+                signature_valid=signature_valid,
+                manifest_hash=exact_match.get("manifest_hash"),
+                key_fingerprint=exact_match.get("key_fingerprint"),
+                message="Authentic Original - Exact SHA-256 match" + (" | Signature Valid" if signature_valid else " | Signature Invalid")
+            )
+            
+        # 2. Soft Binding - pHash Similarity Check
+        phash_sequence = calculate_phash_sequence(str(downloaded_file))
+        if phash_sequence:
+            similar_matches = find_video_by_phash(phash_sequence[0], phash_sequence)
+            if similar_matches:
+                best_match = similar_matches[0]
+                match_percentage = calculate_sequence_similarity(phash_sequence, best_match.get("phash_sequence", []))
+                
+                logger.info(f"Soft match found: {best_match['credential_id']} (similarity: {match_percentage:.1f}%)")
+                signature_valid = verify_stored_signature(best_match)
+                
+                return VerifyResponse(
+                    status="verified" if match_percentage > 85 else "warning",
+                    match_type="similar",
+                    credential_id=best_match["credential_id"],
+                    creator_info={
+                        "public_key": best_match.get("public_key"),
+                        "name": best_match.get("creator_name")
+                    },
+                    signature_valid=signature_valid,
+                    manifest_hash=best_match.get("manifest_hash"),
+                    key_fingerprint=best_match.get("key_fingerprint"),
+                    matches=similar_matches[:5],
+                    message=f"Verified Social Stream (Similarity: {match_percentage:.1f}%)" + (" | Signature Valid" if signature_valid else " | Signature Invalid")
+                )
+                
+        # 3. No Match
+        return VerifyResponse(
+            status="unknown",
+            match_type="none",
+            message="No record found - This video stream has not been signed by the CVPA system"
+        )
+        
+    except Exception as e:
+        logger.error(f"yt-dlp verification failed for {url}: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process video stream from URL.")
+    finally:
+        # Cleanup temp downloaded stream
+        if downloaded_file and downloaded_file.exists():
+            os.remove(downloaded_file)
+            logger.info(f"Cleaned up social media stream temp file: {downloaded_file.name}")
 
 @app.get("/api/identity/me")
 def get_my_identity(current_user: dict = Depends(get_current_user)):

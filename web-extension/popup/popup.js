@@ -54,6 +54,17 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.action.setBadgeText({ text: '' }); // clear native badge
     }
   });
+
+  // Listen for background tasks finishing while popup is actively open
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'local' && changes.cvpa_last_result) {
+      const newVal = changes.cvpa_last_result.newValue;
+      if (newVal) {
+        showResultCard(newVal);
+        chrome.action.setBadgeText({ text: '' });
+      }
+    }
+  });
 });
 
 function showView(view) {
