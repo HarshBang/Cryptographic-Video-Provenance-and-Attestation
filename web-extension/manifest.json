@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CVPA Video Authenticator",
   "version": "1.1.0",
-  "description": "Easily upload and verify videos using Cryptographic Video Provenance & Attestation (CVPA) via right-click.",
+  "description": "Easily upload and verify videos using Cryptographic Video Provenance & Attestation (CVPA).",
   "permissions": [
     "contextMenus",
     "activeTab",

@@ -450,6 +450,7 @@ def find_video_by_phash(phash: str, phash_sequence: List[str] = None, threshold:
                         "filename": row[1],
                         "sha256": row[2],
                         "phash": row[3],
+                        "phash_sequence": json.loads(row[4]) if row[4] else [],
                         "credential_id": row[5],
                         "manifest": json.loads(row[6]) if row[6] else None,
                         "signature": row[7],
@@ -637,3 +638,18 @@ def link_job_to_video(task_id: str, video_id: str):
     c.execute("UPDATE processing_jobs SET video_id = ? WHERE task_id = ?", (video_id, task_id))
     conn.commit()
     conn.close()
+
+def delete_unsealed_video(video_id: str):
+    """Delete an unsealed video and its associated processing jobs to allow re-upload"""
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        c.execute("DELETE FROM processing_jobs WHERE video_id = ?", (video_id,))
+        c.execute("DELETE FROM videos WHERE id = ?", (video_id,))
+        conn.commit()
+        logger.info(f"Deleted unsealed/abandoned video record {video_id} to clear SHA-256 conflict")
+    except Exception as e:
+        logger.error(f"Failed to delete unsealed video {video_id}: {e}")
+        conn.rollback()
+    finally:
+        conn.close()

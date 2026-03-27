@@ -7,7 +7,7 @@ body {
 }
 
 .container {
-  padding: 24px; /* Increased padding */
+  padding: 28px; /* Increased padding */
 }
 
 .header {
@@ -48,7 +48,7 @@ h1 {
 .result-card {
   background: #1e293b;
   border-radius: 12px;
-  padding: 16px;
+  padding: 20px;
   border: 1px solid #334155;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
   position: relative;
@@ -85,8 +85,8 @@ h1 {
 
 .result-actions {
   display: flex;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
 /* End Result Card Styles */
@@ -175,13 +175,14 @@ h1 {
 }
 
 .btn.outline-sm {
-  padding: 8px 10px;
+  padding: 10px 12px;
   font-size: 13px;
 }
 
 .btn.small {
-  padding: 8px;
-  font-size: 12px;
+  padding: 10px;
+  font-size: 13px;
+  margin-top: 16px;
 }
 
 .flex-1 { flex: 1; }

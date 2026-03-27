@@ -43,27 +43,14 @@ export default function LoginPage() {
 
     return (
         <div className="relative flex min-h-screen w-full flex-col bg-slate-900 bg-mesh overflow-x-hidden text-slate-100">
-            {/* Header / Logo Area */}
-            <header className="flex items-center justify-between px-6 py-6 lg:px-12">
-                <div className="flex items-center gap-3">
-                    <div className="size-8 bg-blue-600 flex items-center justify-center rounded-lg shadow-lg shadow-blue-600/20">
-                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M4 4H17.3334V17.3334H30.6666V30.6666H44V44H4V4Z" fill="currentColor"></path>
-                        </svg>
-                    </div>
-                    <h1 className="text-xl font-bold tracking-tight text-white">Provenance AI</h1>
-                </div>
-                <div className="hidden md:block">
-                    <Link href="#" className="text-sm font-medium text-slate-400 hover:text-blue-500 transition-colors">Documentation</Link>
-                </div>
-            </header>
+
 
             {/* Main Content Section */}
             <main className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 bg-slate-900/50 rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
                     
                     {/* Left Side: Visual/Hero */}
-                    <div className="hidden lg:flex flex-col justify-between p-12 bg-blue-600 relative overflow-hidden">
+                    <div className="hidden lg:flex flex-col justify-center gap-16 p-12 bg-blue-600 relative overflow-hidden">
                         <div className="absolute inset-0 opacity-20">
                             <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
                                 <defs>
@@ -75,22 +62,22 @@ export default function LoginPage() {
                             </svg>
                         </div>
                         <div className="relative z-10">
-                            <h2 className="text-4xl font-bold text-white leading-tight">Empowering creators through verifiable video provenance.</h2>
-                            <p className="mt-6 text-blue-100/80 text-lg">Secure your digital legacy with blockchain-backed authenticity seals and cryptographic watermarking.</p>
+                            <h2 className="text-3xl font-bold text-white leading-tight">Focus on your art. We'll protect its authenticity.</h2>
+                            <p className="mt-4 text-blue-100/80 text-lg">Seamlessly seal your original work against deepfakes and unauthorized manipulation with zero friction.</p>
                         </div>
                         <div className="relative z-10 space-y-6">
                             <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
-                                <span className="material-symbols-outlined text-white">verified_user</span>
+                                <span className="material-symbols-outlined text-white opacity-80">video_camera_front</span>
                                 <div className="text-sm text-white">
-                                    <p className="font-bold">End-to-end Encryption</p>
-                                    <p className="opacity-70">Your source files are never compromised.</p>
+                                    <p className="font-bold">Effortless Workflow</p>
+                                    <p className="opacity-70">Sign your content directly from your browser extension or studio dashboard.</p>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
-                                <span className="material-symbols-outlined text-white">security</span>
+                                <span className="material-symbols-outlined text-white opacity-80">gpp_good</span>
                                 <div className="text-sm text-white">
-                                    <p className="font-bold">C2PA Compliant</p>
-                                    <p className="opacity-70">Industry standard metadata protection.</p>
+                                    <p className="font-bold">Unbreakable Proof</p>
+                                    <p className="opacity-70">Establish permanent cryptographic ownership over every frame.</p>
                                 </div>
                             </div>
                         </div>
@@ -99,8 +86,8 @@ export default function LoginPage() {
                     {/* Right Side: Auth Forms */}
                     <div className="p-8 lg:p-16 flex flex-col bg-slate-900">
                         <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-white">Get Started</h2>
-                            <p className="text-slate-400 mt-2">Welcome back to the future of content security.</p>
+                            <h2 className="text-2xl font-bold text-white">Welcome to CVPA</h2>
+                            <p className="text-slate-400 mt-2">Sign in to manage your protected video portfolio.</p>
                         </div>
 
                         {/* Form Tabs */}

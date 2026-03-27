@@ -167,3 +167,19 @@ export async function listVideos(limit: number = 50, offset: number = 0) {
     }
     return res.json(); // Returns { videos, total, limit, offset }
 }
+
+/**
+ * Delete a signed video completely from database and filesystem
+ */
+export async function deleteVideo(credentialId: string) {
+    const headers: any = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/videos/${credentialId}`, { 
+        method: "DELETE",
+        headers 
+    });
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to delete video: ${errorText}`);
+    }
+    return res.json();
+}

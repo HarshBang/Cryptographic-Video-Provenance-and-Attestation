@@ -1,6 +1,6 @@
 "use client"
 
-import { Verified, MailCheck, TrendingUp, CheckCircle, Copy, Download, Play, FileText, FileDown } from "lucide-react"
+import { Verified, MailCheck, TrendingUp, CheckCircle, Copy, Download, Play, FileText, FileDown, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { useState, useEffect } from "react"
 
@@ -24,6 +24,7 @@ export default function DashboardPage() {
     const [videos, setVideos] = useState<Video[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [deletingId, setDeletingId] = useState<string | null>(null)
 
     useEffect(() => {
         fetchVideos()
@@ -38,6 +39,22 @@ export default function DashboardPage() {
             setError(e.message || "Failed to load videos")
         } finally {
             setLoading(false)
+        }
+    }
+
+    const handleDelete = async (credentialId: string) => {
+        if (!confirm("Are you sure you want to unseal and delete this video forever? This cannot be undone.")) return;
+        
+        try {
+            setDeletingId(credentialId);
+            const { deleteVideo } = await import("@/lib/api");
+            await deleteVideo(credentialId);
+            // Refresh video list
+            await fetchVideos();
+        } catch (e: any) {
+            alert(e.message || "Failed to delete video");
+        } finally {
+            setDeletingId(null);
         }
     }
 
@@ -418,7 +435,7 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 text-vca-success">
                         <CheckCircle className="w-4 h-4" />
-                        <span className="text-sm font-medium">Phase 2 Sealed</span>
+                        <span className="text-sm font-medium">Digitally Sealed</span>
                     </div>
                 </div>
 
@@ -483,11 +500,23 @@ export default function DashboardPage() {
                                 </thead>
                                 <tbody className="divide-y divide-vca-border-dark">
                                     {videos.map((video) => (
-                                        <tr key={video.id} className="hover:bg-white/5 transition-colors group">
+                                        <tr key={video.id} className={`hover:bg-white/5 transition-colors group ${deletingId === video.credential_id ? 'opacity-50 pointer-events-none' : ''}`}>
                                             <td className="px-6 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-white font-medium text-sm">{video.filename}</span>
-                                                    <span className="text-xs text-slate-500">{formatFileSize(video.file_size)}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <div className="flex-shrink-0 w-16 h-10 rounded overflow-hidden bg-slate-800 border border-slate-700 relative flex items-center justify-center">
+                                                        <video 
+                                                            src={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/uploads/${encodeURIComponent(video.filename)}#t=1.0`} 
+                                                            className="w-full h-full object-cover"
+                                                            preload="metadata"
+                                                            muted
+                                                            playsInline
+                                                            crossOrigin="anonymous"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col truncate">
+                                                        <span className="text-white font-medium text-sm truncate max-w-[200px]" title={video.filename}>{video.filename}</span>
+                                                        <span className="text-xs text-slate-500">{formatFileSize(video.file_size)}</span>
+                                                    </div>
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
@@ -523,10 +552,23 @@ export default function DashboardPage() {
                                                     </button>
                                                     <button 
                                                         onClick={() => downloadPDF(video)}
-                                                        className="text-slate-400 hover:text-red-400 transition-colors p-2 rounded hover:bg-red-400/10"
+                                                        className="text-slate-400 hover:text-white transition-colors p-2 rounded hover:bg-white/10"
                                                         title="Download Certificate PDF"
                                                     >
                                                         <FileDown className="w-5 h-5" />
+                                                    </button>
+                                                    <div className="w-px h-4 bg-slate-700 mx-1"></div>
+                                                    <button 
+                                                        onClick={() => handleDelete(video.credential_id)}
+                                                        className="text-slate-400 hover:text-red-400 transition-colors p-2 rounded hover:bg-red-400/10"
+                                                        title="Unseal & Delete Video"
+                                                        disabled={deletingId === video.credential_id}
+                                                    >
+                                                        {deletingId === video.credential_id ? (
+                                                            <div className="w-4 h-4 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
+                                                        ) : (
+                                                            <Trash2 className="w-5 h-5" />
+                                                        )}
                                                     </button>
                                                 </div>
                                             </td>

@@ -30,8 +30,11 @@ export default function Home() {
         </div>
       </div>
 
-      <footer className="mt-20 text-xs text-[#64748b]">
-        CVPA v1.0 • Built with Next.js & FastAPI
+      <footer className="mt-20 text-[11px] text-[#64748b] flex flex-col items-center gap-1.5">
+        <span>Developed by Harsh Bang</span>
+        <a href="https://github.com/HarshBang/Cryptographic-Video-Provenance-and-Attestation" target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 underline font-medium">
+          View GitHub Repository
+        </a>
       </footer>
     </div>
   );

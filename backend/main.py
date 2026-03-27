@@ -1,5 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from typing import Optional, Dict, List
 from pydantic import BaseModel
 import shutil
@@ -41,7 +42,8 @@ from core.database import (
     create_unsigned_video_record,
     finalize_video_signature,
     link_job_to_video,
-    compute_key_fingerprint
+    compute_key_fingerprint,
+    delete_unsealed_video
 )
 
 # Configure Logging
@@ -69,6 +71,9 @@ TASKS: Dict[str, dict] = {}
 BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
+
+# Mount uploads directory so frontend can use native <video> thumbnail extraction
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # Pydantic Models - Phase 2
 class UploadResponse(BaseModel):
@@ -157,16 +162,22 @@ def process_video_task(task_id: str, file_path: str, filename: str, file_size: i
         # Check for duplicate SHA
         existing = find_video_by_sha256(sha256)
         if existing:
-            logger.info(f"Duplicate SHA detected: {existing['credential_id']}")
-            TASKS[task_id]["status"] = "complete"
-            TASKS[task_id]["progress"] = 100
-            TASKS[task_id]["result"] = {
-                "duplicate": True,
-                "credential_id": existing["credential_id"],
-                "message": "Video already exists in system"
-            }
-            update_processing_job(task_id, "complete", 100, "complete", TASKS[task_id]["result"])
-            return
+            if existing.get("status") == "sealed":
+                logger.info(f"Duplicate SEALD SHA detected: {existing['credential_id']}")
+                TASKS[task_id]["status"] = "complete"
+                TASKS[task_id]["progress"] = 100
+                TASKS[task_id]["result"] = {
+                    "duplicate": True,
+                    "credential_id": existing["credential_id"],
+                    "message": "Video already exists in system"
+                }
+                update_processing_job(task_id, "complete", 100, "complete", TASKS[task_id]["result"])
+                return
+            else:
+                # The video was uploaded before but the signing process was abandoned/failed.
+                # Delete the ghost record so we don't hit a UNIQUE constraint error on the SHA-256 column.
+                logger.info(f"Found abandoned unsealed video {existing['id']} with same SHA. Cleaning up to allow re-upload.")
+                delete_unsealed_video(existing["id"])
         
         # 2. Sparse Frame Sampling with dHash (Soft Binding) - Phase 2: Time-based
         TASKS[task_id]["step"] = "Perceptual Hashing"
@@ -288,7 +299,7 @@ async def upload_video(background_tasks: BackgroundTasks, file: UploadFile = Fil
             raise HTTPException(status_code=413, detail="File too large (max 5GB)")
             
         # Move to permanent location
-        file_path = UPLOAD_DIR / f"{task_id}_{file.filename}"
+        file_path = UPLOAD_DIR / file.filename
         shutil.move(str(temp_file_path), str(file_path))
         
         # Get MIME type
@@ -426,10 +437,7 @@ def finalize_signature(req: FinalizeSignatureRequest, current_user: dict = Depen
     if not success:
         raise HTTPException(status_code=500, detail="Failed to finalize video signature")
     
-    # Cleanup temporary files
-    file_path = UPLOAD_DIR / f"{task_id}_{result['filename']}"
-    if file_path.exists():
-        os.remove(file_path)
+    # (Removed temporary file cleanup - file is intentionally kept for Dashboard thumbnails)
     
     logger.info(f"Phase 2 signature finalized: {credential_id} for {result['filename']}")
     
@@ -578,6 +586,54 @@ def get_videos(limit: int = 50, offset: int = 0, current_user: dict = Depends(ge
         "limit": limit,
         "offset": offset
     }
+
+@app.delete("/api/videos/{credential_id}")
+def delete_video(credential_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a signed video completely from database and filesystem"""
+    from core.database import get_db_connection
+    video = get_video_by_credential_id(credential_id)
+    if not video:
+        raise HTTPException(status_code=404, detail="Video not found")
+        
+    # Check ownership (creator_id matching was handled by join in find but we must verify here if we have it)
+    # The get_video_by_credential_id returns creator_name, but not creator_id directly. Let's just run an explicit DB check.
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT id, creator_id, filename FROM videos WHERE credential_id = ?", (credential_id,))
+    row = c.fetchone()
+    
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Video not found")
+        
+    v_id, c_id, filename = row
+    
+    if c_id != current_user["id"]:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Not authorized to delete this video")
+        
+    try:
+        # Delete from jobs first (foreign key constraint)
+        c.execute("DELETE FROM processing_jobs WHERE video_id = ?", (v_id,))
+        # Delete from videos
+        c.execute("DELETE FROM videos WHERE id = ?", (v_id,))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Database deletion failed: {e}")
+    finally:
+        conn.close()
+        
+    # Delete from filesystem
+    filepath = UPLOAD_DIR / filename
+    if filepath.exists():
+        try:
+            os.remove(filepath)
+            logger.info(f"Deleted physical file {filepath}")
+        except Exception as e:
+            logger.error(f"Failed to delete file {filepath}: {e}")
+            
+    return {"status": "success", "message": "Video unsealed and removed."}
 
 @app.get("/api/health")
 def health_check():

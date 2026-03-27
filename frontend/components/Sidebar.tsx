@@ -2,41 +2,53 @@
 
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutDashboard, Video, Fingerprint, Activity, Settings, Zap, LogOut } from "lucide-react" // Using Lucide as modern replacement for Material Symbols
+import { LayoutDashboard, Zap, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { userPool } from "@/lib/cognito"
+import { useEffect, useState } from "react"
 
 const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     // { name: "My Library", href: "/dashboard", icon: Video },
     { name: "Video Intake", href: "/dashboard/intake", icon: Zap },
-    { name: "Identity", href: "/dashboard/identity", icon: Fingerprint },
-    { name: "Analytics", href: "/dashboard/analytics", icon: Activity },
 ]
 
 export function Sidebar() {
     const pathname = usePathname()
     const router = useRouter()
 
-    const handleLogout = () => {
-        const user = userPool.getCurrentUser()
+    const [creatorName, setCreatorName] = useState("Creator");
+    const [creatorInitials, setCreatorInitials] = useState("CR");
+
+    useEffect(() => {
+        const user = userPool.getCurrentUser();
         if (user) {
-            user.signOut()
+            user.getSession((err: any, session: any) => {
+                if (!err && session.isValid()) {
+                    user.getUserAttributes((err: any, attributes: any) => {
+                        if (!err && attributes) {
+                            const nameAttr = attributes.find((a: any) => a.getName() === 'name');
+                            if (nameAttr) {
+                                setCreatorName(nameAttr.getValue());
+                                setCreatorInitials(nameAttr.getValue().substring(0, 2).toUpperCase());
+                            }
+                        }
+                    });
+                }
+            });
         }
-        router.push('/login')
-    }
+    }, []);
 
     return (
         <aside className="w-64 flex-shrink-0 flex flex-col border-r border-[#2a3649] bg-[#111722] transition-all duration-300 h-screen fixed left-0 top-0 z-50">
             {/* Brand / Profile Header */}
             <div className="p-6 border-b border-[#2a3649] flex items-center gap-3">
                 <div className="relative h-10 w-10 rounded-full border border-slate-600 shadow-sm overflow-hidden bg-gradient-to-br from-indigo-500 to-purple-500">
-                    {/* Placeholder Avatar */}
-                    <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">AC</div>
+                    <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">{creatorInitials}</div>
                 </div>
                 <div>
-                    <h1 className="text-white text-base font-bold leading-tight tracking-tight">CVPA</h1>
-                    <p className="text-slate-400 text-xs font-medium">Creator Suite</p>
+                    <h1 className="text-white text-base font-bold leading-tight tracking-tight truncate max-w-[140px]">{creatorName}</h1>
+                    <p className="text-slate-400 text-xs font-medium">CVPA Profile</p>
                 </div>
             </div>
 
@@ -84,20 +96,12 @@ export function Sidebar() {
                 </div>
 
                 <Link
-                    href="/settings"
+                    href="/dashboard/settings"
                     className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#161e2e] transition-colors group text-slate-400 hover:text-white"
                 >
                     <Settings className="h-5 w-5 group-hover:rotate-90 transition-transform duration-500" />
-                    <p className="text-sm font-medium">Settings</p>
+                    <p className="text-sm font-medium">Settings & Profile</p>
                 </Link>
-
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 px-3 py-2 mt-2 w-full text-left rounded-lg hover:bg-red-500/10 transition-colors group text-slate-400 hover:text-red-400"
-                >
-                    <LogOut className="h-5 w-5 group-hover:scale-110 transition-transform duration-300" />
-                    <p className="text-sm font-medium">Log out</p>
-                </button>
             </div>
         </aside>
     )

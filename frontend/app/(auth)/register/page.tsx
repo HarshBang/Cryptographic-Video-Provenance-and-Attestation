@@ -86,17 +86,7 @@ export default function RegisterPage() {
 
     return (
         <div className="relative flex min-h-screen w-full flex-col bg-slate-900 bg-mesh overflow-x-hidden text-slate-100">
-            {/* Header / Logo Area */}
-            <header className="flex items-center justify-between px-6 py-6 lg:px-12">
-                <div className="flex items-center gap-3">
-                    <div className="size-8 bg-blue-600 flex items-center justify-center rounded-lg shadow-lg shadow-blue-600/20">
-                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M4 4H17.3334V17.3334H30.6666V30.6666H44V44H4V4Z" fill="currentColor"></path>
-                        </svg>
-                    </div>
-                    <h1 className="text-xl font-bold tracking-tight text-white">Provenance AI</h1>
-                </div>
-            </header>
+
 
             {/* Main Content Section */}
             <main className="flex-1 flex items-center justify-center px-4 py-12">
@@ -114,18 +104,35 @@ export default function RegisterPage() {
                                 <rect fill="url(#grid)" height="100" width="100"></rect>
                             </svg>
                         </div>
-                        <div className="relative z-10">
-                            <h2 className="text-4xl font-bold text-white leading-tight">Empowering creators through verifiable video provenance.</h2>
-                            <p className="mt-6 text-blue-100/80 text-lg">Secure your digital legacy with blockchain-backed authenticity seals and cryptographic watermarking.</p>
+                        <div className="relative z-10 w-full h-full flex flex-col justify-center">
+                            <h2 className="text-4xl font-bold text-white leading-tight">Focus on your art. We'll protect its authenticity.</h2>
+                            <p className="mt-8 text-blue-100/80 text-lg">Seamlessly seal your original work against deepfakes and unauthorized manipulation with zero friction.</p>
+
+                            <div className="mt-12 space-y-6">
+                                <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
+                                    <span className="material-symbols-outlined text-white opacity-80">video_camera_front</span>
+                                    <div className="text-sm text-white">
+                                        <p className="font-bold">Effortless Workflow</p>
+                                        <p className="opacity-70">Sign your content directly from your browser extension or studio dashboard.</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
+                                    <span className="material-symbols-outlined text-white opacity-80">gpp_good</span>
+                                    <div className="text-sm text-white">
+                                        <p className="font-bold">Unbreakable Proof</p>
+                                        <p className="opacity-70">Establish permanent cryptographic ownership over every frame.</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
                     {/* Right Side: Auth Forms */}
                     <div className="p-8 lg:p-12 flex flex-col bg-slate-900">
                         <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-white">{step === "register" ? "Get Started" : "Verify Email"}</h2>
+                            <h2 className="text-2xl font-bold text-white">{step === "register" ? "Join CVPA" : "Verify Email"}</h2>
                             <p className="text-slate-400 mt-2">
-                                {step === "register" ? "Welcome back to the future of content security." : `We sent a code to ${email}`}
+                                {step === "register" ? "Create an account to lock in your creative identity." : `We sent a code to ${email}`}
                             </p>
                         </div>
 

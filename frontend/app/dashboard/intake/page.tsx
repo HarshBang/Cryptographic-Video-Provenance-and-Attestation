@@ -25,12 +25,7 @@ export default function IntakePage() {
 
     return (
         <>
-            <div className="mb-10">
-                <h1 className="text-3xl md:text-4xl font-bold mb-2 text-white">New Video Intake</h1>
-                <p className="text-vca-text-secondary text-lg">
-                    Phase 2: Custodial Content Signing. Your videos are automatically protected using your secure backend identity.
-                </p>
-            </div>
+
 
             {/* Show active identity */}
             {loading ? (

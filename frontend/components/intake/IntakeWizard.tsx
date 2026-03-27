@@ -103,16 +103,16 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                             
                             // Store manifest data for signing
                             setManifestHash(status.result?.manifest_hash)
-                            setManifest({
-                                status: "ready_to_sign",
-                                manifest_hash: status.result?.manifest_hash,
-                                frame_count: status.result?.frame_count,
-                                asset: {
-                                    name: status.result?.filename,
-                                    sha256: status.result?.sha256,
-                                    size: status.result?.size
+                            if (status.result?.canonical_manifest) {
+                                try {
+                                    setManifest(JSON.parse(status.result.canonical_manifest))
+                                } catch (e) {
+                                    console.error("Failed to parse canonical manifest string", e)
+                                    setManifest({ error: "Could not parse preview manifest" })
                                 }
-                            })
+                            } else {
+                                setManifest({ status: "ready_to_sign" })
+                            }
                         }
                         
                         setTimeout(() => setStep(3), 1000)
@@ -159,7 +159,7 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                     const res = await uploadVideo(selectedFile)
                     console.log("Upload response:", res)
                     setTaskId(res.task_id)
-                    addLog("Upload complete. Phase 2 processing started.", "success")
+                    addLog("Upload complete. Video processing started.", "success")
                     addLog("Computing SHA-256 and dHash sequence...", "process")
                 } catch (e: any) {
                     console.error("Upload error:", e)
@@ -240,16 +240,16 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Main Content Area */}
-                <div className="lg:col-span-2 space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                {/* Left Column Area */}
+                <div className="flex flex-col gap-6 w-full">
 
                     {/* Step 1: Upload UI */}
                     {step === 1 && (
                         <div
                             onClick={handleFileSelect}
                             className={cn(
-                                "border-2 border-dashed rounded-xl h-96 flex flex-col items-center justify-center transition-all group",
+                                "border-2 border-dashed rounded-xl h-[300px] flex flex-col items-center justify-center transition-all group",
                                 hasIdentity 
                                     ? "border-vca-border-dark bg-vca-surface-dark cursor-pointer hover:border-primary/50 hover:bg-white/5"
                                     : "border-slate-700 bg-slate-800/50 cursor-not-allowed opacity-60"
@@ -261,7 +261,7 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                             <h3 className="text-xl font-bold text-white mb-2">Upload Raw Video</h3>
                             <p className="text-slate-400 text-sm mb-8">Drag and drop or click to browse (MP4, MOV)</p>
                             <div className="px-4 py-2 bg-slate-800 rounded text-xs text-slate-500 font-mono">
-                                Phase 2 • Client-Side Signing • Max: 5GB
+                                Custodial Signing • Max: 5GB
                             </div>
                         </div>
                     )}
@@ -277,7 +277,7 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                                             {step === 2 && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>}
                                             <span className={cn("relative inline-flex rounded-full h-3 w-3", step === 2 ? "bg-primary" : "bg-vca-success")}></span>
                                         </span>
-                                        <h3 className="font-bold text-lg text-white">Phase 2 Processing</h3>
+                                        <h3 className="font-bold text-lg text-white">Video Processing</h3>
                                     </div>
                                     <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-1 rounded">
                                         ID: {taskId ? taskId.substring(0, 8) : "INITIALIZING"}
@@ -298,8 +298,8 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                     )}
                 </div>
 
-                {/* Right Sidebar / Actions */}
-                <div className="lg:col-span-1 space-y-6">
+                {/* Right Column Area */}
+                <div className="flex flex-col gap-6 w-full">
                     {/* Manifest Preview */}
                     {step >= 2 && <ManifestPreview manifest={manifest} signatureResult={signatureResult} />}
 
@@ -307,24 +307,14 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                     <div className="bg-white dark:bg-vca-surface-dark rounded-xl border border-vca-border-dark p-6 shadow-sm">
                         <div className="flex flex-col gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center">
-                                    <ShieldCheck className="w-5 h-5 text-slate-400" />
+                                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                                    <ShieldCheck className="w-5 h-5 text-primary" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-white">Custodial Signing</p>
-                                    <p className="text-xs text-slate-500">Ed25519 • Secure Automatic Key Management</p>
+                                    <p className="text-sm font-bold text-white">Custodial Signing Active</p>
+                                    <p className="text-xs text-slate-500">Ed25519 Infrastructure</p>
                                 </div>
                             </div>
-                            
-                            {/* Show key fingerprint if available (now managed by backend) */}
-                            {hasIdentity && (
-                                <div className="p-3 bg-slate-800/50 rounded-lg">
-                                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                                        <Fingerprint className="w-3 h-3" />
-                                        <span>Key Active</span>
-                                    </div>
-                                </div>
-                            )}
                             
                             <div className="h-px bg-slate-700 w-full" />
                             <button
@@ -338,7 +328,7 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                                 disabled={step !== 3 || signing || !hasIdentity}
                             >
                                 {signing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
-                                {signing ? "Signing in Browser..." : (step === 3 ? "Sign & Finalize" : "Waiting...")}
+                                {signing ? "Signing..." : (step === 3 ? "Sign Video" : "Waiting...")}
                             </button>
                             
                             {!hasIdentity && step === 3 && (
