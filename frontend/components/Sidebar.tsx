@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
-import { LayoutDashboard, Zap, Settings } from "lucide-react"
+import { LayoutDashboard, Zap, Settings, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { userPool } from "@/lib/cognito"
 import { useEffect, useState } from "react"
@@ -21,6 +21,7 @@ export function Sidebar() {
     const [creatorInitials, setCreatorInitials] = useState("CR");
 
     useEffect(() => {
+        // Try Cognito SDK session first (email/password login)
         const user = userPool.getCurrentUser();
         if (user) {
             user.getSession((err: any, session: any) => {
@@ -36,8 +37,28 @@ export function Sidebar() {
                     });
                 }
             });
+        } else {
+            // Fall back to OAuth token (Google login)
+            const idToken = typeof window !== "undefined" ? localStorage.getItem("cognito_id_token") : null;
+            if (idToken) {
+                try {
+                    const payload = JSON.parse(atob(idToken.split(".")[1]));
+                    const name = payload.name || payload.email || "Creator";
+                    setCreatorName(name);
+                    setCreatorInitials(name.substring(0, 2).toUpperCase());
+                } catch {}
+            }
         }
     }, []);
+
+    const handleLogout = () => {
+        const user = userPool.getCurrentUser();
+        if (user) user.signOut();
+        localStorage.removeItem("cognito_id_token");
+        localStorage.removeItem("cognito_access_token");
+        localStorage.removeItem("cognito_refresh_token");
+        router.push("/login");
+    };
 
     return (
         <aside className="w-64 flex-shrink-0 flex flex-col border-r border-[#2a3649] bg-[#111722] transition-all duration-300 h-screen fixed left-0 top-0 z-50">
@@ -82,19 +103,8 @@ export function Sidebar() {
                 })}
             </nav>
 
-            {/* Bottom Settings */}
+                {/* Bottom Settings */}
             <div className="p-4 border-t border-[#2a3649]">
-                <div className="px-3 py-4 rounded-xl bg-gradient-to-br from-[#135bec]/20 to-purple-500/10 border border-[#135bec]/20 mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Zap className="h-4 w-4 text-[#0bda5e]" />
-                        <span className="text-xs font-bold text-white uppercase tracking-wider">System Status</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="h-2 w-2 rounded-full bg-[#0bda5e] animate-pulse" />
-                        <span className="text-xs text-slate-300">All Systems Normal</span>
-                    </div>
-                </div>
-
                 <Link
                     href="/dashboard/settings"
                     className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-[#161e2e] transition-colors group text-slate-400 hover:text-white"
@@ -102,6 +112,13 @@ export function Sidebar() {
                     <Settings className="h-5 w-5 group-hover:rotate-90 transition-transform duration-500" />
                     <p className="text-sm font-medium">Settings & Profile</p>
                 </Link>
+                <button
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors group text-slate-400 hover:text-red-400 mt-1"
+                >
+                    <LogOut className="h-5 w-5" />
+                    <p className="text-sm font-medium">Sign Out</p>
+                </button>
             </div>
         </aside>
     )

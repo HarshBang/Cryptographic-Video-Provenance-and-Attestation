@@ -5,12 +5,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthenticationDetails, CognitoUser } from "amazon-cognito-identity-js";
 import { userPool } from "@/lib/cognito";
+import ShapeGrid from "@/components/ui/ShapeGrid";
 
 export default function LoginPage() {
+    const [step, setStep] = useState<"login" | "forgot_password" | "reset_password">("login");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [resetCode, setResetCode] = useState("");
+    const [newPassword, setNewPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const router = useRouter();
 
     const handleLogin = (e: React.FormEvent) => {
@@ -41,113 +46,268 @@ export default function LoginPage() {
         });
     };
 
+    const handleForgotPassword = (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        setSuccessMsg(null);
+        const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+        cognitoUser.forgotPassword({
+            onSuccess: function (data) {
+                console.log("Forgot Password Success", data);
+                setLoading(false);
+            },
+            onFailure: function (err) {
+                console.error("Forgot Password Error", err);
+                setError(err.message || "Failed to reset password");
+                setLoading(false);
+            },
+            inputVerificationCode: function (data) {
+                setStep("reset_password");
+                setSuccessMsg(`Verification code sent to ${email}`);
+                setLoading(false);
+            }
+        });
+    };
+
+    const handleResetPassword = (e: React.FormEvent) => {
+        e.preventDefault();
+        setLoading(true);
+        setError(null);
+        setSuccessMsg(null);
+        const cognitoUser = new CognitoUser({ Username: email, Pool: userPool });
+        cognitoUser.confirmPassword(resetCode, newPassword, {
+            onSuccess: function () {
+                console.log("Password reset successful.");
+                setStep("login");
+                setSuccessMsg("Password reset successfully. You can now log in.");
+                setPassword("");
+                setLoading(false);
+            },
+            onFailure: function (err) {
+                console.error("Password reset error", err);
+                setError(err.message || "Failed to reset password");
+                setLoading(false);
+            }
+        });
+    };
+
+    const handleGoogleLogin = () => {
+        const domain = process.env.NEXT_PUBLIC_COGNITO_DOMAIN;
+        const clientId = process.env.NEXT_PUBLIC_COGNITO_CLIENT_ID;
+        const redirectUri = typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : "";
+        
+        if (!domain) {
+            setError("Cognito domain is not configured. Please set NEXT_PUBLIC_COGNITO_DOMAIN in .env.local");
+            return;
+        }
+        
+        const url = `https://${domain}/oauth2/authorize?identity_provider=Google&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=CODE&client_id=${clientId}&scope=email+openid+profile`;
+        window.location.href = url;
+    };
+
     return (
-        <div className="relative flex min-h-screen w-full flex-col bg-slate-900 bg-mesh overflow-x-hidden text-slate-100">
-
-
-            {/* Main Content Section */}
-            <main className="flex-1 flex items-center justify-center px-4 py-12">
-                <div className="w-full max-w-[1100px] grid grid-cols-1 lg:grid-cols-2 bg-slate-900/50 rounded-xl overflow-hidden border border-slate-800 shadow-2xl">
-                    
-                    {/* Left Side: Visual/Hero */}
-                    <div className="hidden lg:flex flex-col justify-center gap-16 p-12 bg-blue-600 relative overflow-hidden">
-                        <div className="absolute inset-0 opacity-20">
-                            <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
-                                <defs>
-                                    <pattern height="10" id="grid" patternUnits="userSpaceOnUse" width="10">
-                                        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="white" strokeWidth="0.5"></path>
-                                    </pattern>
-                                </defs>
-                                <rect fill="url(#grid)" height="100" width="100"></rect>
-                            </svg>
+        <div className="flex min-h-screen w-full overflow-hidden text-slate-100 bg-slate-900">
+            <main className="flex-1 grid grid-cols-1 lg:grid-cols-2 w-full">
+                
+                {/* Left Side: Visual/Hero */}
+                <div className="hidden lg:flex flex-col items-center justify-center gap-12 p-12 bg-[#101622] relative overflow-hidden border-r border-slate-800">
+                    <div className="absolute inset-0 z-0">
+                        <ShapeGrid 
+                            speed={0.5}
+                            squareSize={60}
+                            direction="diagonal"
+                            borderColor="#271E37"
+                            hoverFillColor="#222222"
+                            shape="square"
+                            hoverTrailAmount={0}
+                        />
+                    </div>
+                    <div className="relative z-10 pointer-events-none text-center w-full px-4">
+                        <h2 className="text-4xl lg:text-5xl font-bold text-white leading-tight">Focus on your art.<br/>We'll protect its authenticity.</h2>
+                    </div>
+                    <div className="relative z-10 space-y-6 pointer-events-none w-full max-w-md">
+                        <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-center">
+                            <p className="font-bold text-blue-500 text-lg mb-2">Effortless Workflow</p>
+                            <p className="opacity-80 text-white text-sm">Sign content right from your browser or dashboard.</p>
                         </div>
-                        <div className="relative z-10">
-                            <h2 className="text-3xl font-bold text-white leading-tight">Focus on your art. We'll protect its authenticity.</h2>
-                            <p className="mt-4 text-blue-100/80 text-lg">Seamlessly seal your original work against deepfakes and unauthorized manipulation with zero friction.</p>
-                        </div>
-                        <div className="relative z-10 space-y-6">
-                            <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
-                                <span className="material-symbols-outlined text-white opacity-80">video_camera_front</span>
-                                <div className="text-sm text-white">
-                                    <p className="font-bold">Effortless Workflow</p>
-                                    <p className="opacity-70">Sign your content directly from your browser extension or studio dashboard.</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4 bg-white/10 p-4 rounded-lg backdrop-blur-sm border border-white/10">
-                                <span className="material-symbols-outlined text-white opacity-80">gpp_good</span>
-                                <div className="text-sm text-white">
-                                    <p className="font-bold">Unbreakable Proof</p>
-                                    <p className="opacity-70">Establish permanent cryptographic ownership over every frame.</p>
-                                </div>
-                            </div>
+                        <div className="flex flex-col items-center justify-center p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/10 text-center">
+                            <p className="font-bold text-blue-500 text-lg mb-2">Unbreakable Proof</p>
+                            <p className="opacity-80 text-white text-sm">Permanent cryptographic ownership of your work.</p>
                         </div>
                     </div>
+                </div>
 
-                    {/* Right Side: Auth Forms */}
-                    <div className="p-8 lg:p-16 flex flex-col bg-slate-900">
-                        <div className="mb-8">
-                            <h2 className="text-2xl font-bold text-white">Welcome to CVPA</h2>
-                            <p className="text-slate-400 mt-2">Sign in to manage your protected video portfolio.</p>
-                        </div>
-
+                {/* Right Side: Auth Forms */}
+                <div className="flex flex-col justify-center items-center p-8 lg:p-16 bg-slate-900 overflow-y-auto">
+                    <div className="w-full max-w-md flex flex-col pt-8 pb-12">
                         {/* Form Tabs */}
-                        <div className="flex border-b border-slate-800 mb-8">
-                            <Link href="/login" className="flex-1 text-center py-3 text-sm font-bold border-b-2 border-blue-600 text-blue-500 transition-all">Sign In</Link>
-                            <Link href="/register" className="flex-1 text-center py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all">Create Account</Link>
-                        </div>
-
-                        {error && <div className="mb-4 text-red-500 text-sm">{error}</div>}
-
-                        {/* Form Section */}
-                        <form className="space-y-5" onSubmit={handleLogin}>
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-300">Email Address</label>
-                                <input 
-                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
-                                    placeholder="name@company.com" 
-                                    type="email"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
-                                    required
-                                />
+                        {step === "login" && (
+                            <div className="flex border-b border-slate-800 mb-8">
+                                <Link href="/login" className="flex-1 text-center py-3 text-sm font-bold border-b-2 border-blue-600 text-blue-500 transition-all">Sign In</Link>
+                                <Link href="/register" className="flex-1 text-center py-3 text-sm font-bold border-b-2 border-transparent text-slate-400 hover:text-slate-200 transition-all">Create Account</Link>
                             </div>
-                            <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                    <label className="text-sm font-medium text-slate-300">Password</label>
-                                    <Link className="text-xs font-medium text-blue-500 hover:underline" href="#">Forgot password?</Link>
+                        )}
+                        {step !== "login" && (
+                            <div className="mb-8">
+                                <h2 className="text-2xl font-bold text-white">
+                                    {step === "forgot_password" ? "Reset Password" : "Set New Password"}
+                                </h2>
+                                <p className="text-slate-400 mt-2">
+                                    {step === "forgot_password" 
+                                        ? "Enter your email to receive a password reset code." 
+                                        : `Enter the code sent to ${email} and your new password.`}
+                                </p>
+                            </div>
+                        )}
+
+                        {error && <div className="mb-4 text-red-500 text-sm border border-red-500/50 bg-red-500/10 p-3 rounded">{error}</div>}
+                        {successMsg && <div className="mb-4 text-green-500 text-sm border border-green-500/50 bg-green-500/10 p-3 rounded">{successMsg}</div>}
+
+                        {/* STEP: LOGIN */}
+                        {step === "login" && (
+                            <form className="space-y-5" onSubmit={handleLogin}>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-300">Email Address</label>
+                                    <input 
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
+                                        placeholder="name@company.com" 
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        required
+                                    />
                                 </div>
-                                <input 
-                                    className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
-                                    placeholder="••••••••" 
-                                    type="password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <button 
-                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all transform active:scale-[0.98]" 
-                                type="submit"
-                                disabled={loading}
-                            >
-                                {loading ? "Signing In..." : "Sign In"}
-                            </button>
-                        </form>
+                                <div className="space-y-2">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-medium text-slate-300">Password</label>
+                                        <button type="button" onClick={() => { setStep("forgot_password"); setError(null); }} className="text-xs font-medium text-blue-500 hover:underline">Forgot password?</button>
+                                    </div>
+                                    <input 
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
+                                        placeholder="••••••••" 
+                                        type="password"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button 
+                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all transform active:scale-[0.98]" 
+                                    type="submit"
+                                    disabled={loading}
+                                >
+                                    {loading ? "Signing In..." : "Sign In"}
+                                </button>
+                            </form>
+                        )}
+
+                        {/* STEP: FORGOT PASSWORD */}
+                        {step === "forgot_password" && (
+                            <form className="space-y-5" onSubmit={handleForgotPassword}>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-300">Email Address</label>
+                                    <input 
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
+                                        placeholder="name@company.com" 
+                                        type="email"
+                                        value={email}
+                                        onChange={(e) => setEmail(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button 
+                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all transform active:scale-[0.98]" 
+                                    type="submit"
+                                    disabled={loading || !email}
+                                >
+                                    {loading ? "Sending Code..." : "Send Reset Code"}
+                                </button>
+                                <div className="text-center mt-4">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setStep("login"); setError(null); }}
+                                        className="text-sm text-slate-400 hover:text-white transition-colors"
+                                    >
+                                        Back to Sign In
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+
+                        {/* STEP: RESET PASSWORD */}
+                        {step === "reset_password" && (
+                            <form className="space-y-5" onSubmit={handleResetPassword}>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-300">Reset Code</label>
+                                    <input 
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-lg font-mono tracking-[0.5em] text-center focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
+                                        placeholder="123456" 
+                                        type="text"
+                                        value={resetCode}
+                                        onChange={(e) => setResetCode(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-slate-300">New Password</label>
+                                    <input 
+                                        className="w-full bg-slate-800/50 border border-slate-700 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all text-white placeholder-slate-500" 
+                                        placeholder="••••••••" 
+                                        type="password"
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)}
+                                        required
+                                    />
+                                </div>
+                                <button 
+                                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg shadow-lg shadow-blue-600/20 transition-all transform active:scale-[0.98]" 
+                                    type="submit"
+                                    disabled={loading || !resetCode || !newPassword}
+                                >
+                                    {loading ? "Resetting..." : "Set New Password"}
+                                </button>
+                                <div className="text-center mt-4">
+                                    <button 
+                                        type="button" 
+                                        onClick={() => { setStep("login"); setError(null); }}
+                                        className="text-sm text-slate-400 hover:text-white transition-colors"
+                                    >
+                                        Cancel Reset
+                                    </button>
+                                </div>
+                            </form>
+                        )}
 
                         {/* Divider */}
-                        <div className="relative my-8">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-slate-800"></div>
-                            </div>
-                            <div className="relative flex justify-center text-xs uppercase">
-                                <span className="bg-slate-900 px-2 text-slate-400">Or continue with</span>
-                            </div>
-                        </div>
+                        {step === "login" && (
+                            <>
+                                <div className="relative my-8">
+                                    <div className="absolute inset-0 flex items-center">
+                                        <div className="w-full border-t border-slate-800"></div>
+                                    </div>
+                                    <div className="relative flex justify-center text-xs uppercase">
+                                        <span className="bg-slate-900 px-2 text-slate-400">Or continue with</span>
+                                    </div>
+                                </div>
 
-                        {/* Footer Note */}
-                        <p className="mt-auto text-center text-xs text-slate-400">
-                            By signing in, you agree to our <Link className="text-blue-500 hover:underline" href="#">Terms of Service</Link> and <Link className="text-blue-500 hover:underline" href="#">Privacy Policy</Link>.
-                        </p>
+                                {/* Google Auth Button */}
+                                <button 
+                                    onClick={handleGoogleLogin}
+                                    type="button"
+                                    className="w-full flex items-center justify-center gap-3 bg-white hover:bg-slate-100 text-slate-900 font-bold py-3 px-4 rounded-lg transition-all shadow-sm border border-slate-200"
+                                >
+                                    <svg className="w-5 h-5" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                                        <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                                        <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                                        <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                                    </svg>
+                                    Sign in with Google
+                                </button>
+                            </>
+                        )}
+
                     </div>
                 </div>
             </main>

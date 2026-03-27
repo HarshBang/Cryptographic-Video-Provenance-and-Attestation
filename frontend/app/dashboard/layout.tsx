@@ -15,7 +15,23 @@ export default function DashboardLayout({
 
     useEffect(() => {
         const user = userPool.getCurrentUser();
-        if (!user) {
+        // Check for valid (non-expired) OAuth token
+        let hasValidOAuthToken = false;
+        if (typeof window !== "undefined") {
+            const oauthToken = localStorage.getItem("cognito_id_token");
+            if (oauthToken) {
+                try {
+                    const payload = JSON.parse(atob(oauthToken.split(".")[1]));
+                    hasValidOAuthToken = payload.exp && Date.now() / 1000 < payload.exp;
+                } catch {}
+                if (!hasValidOAuthToken) {
+                    localStorage.removeItem("cognito_id_token");
+                    localStorage.removeItem("cognito_access_token");
+                    localStorage.removeItem("cognito_refresh_token");
+                }
+            }
+        }
+        if (!user && !hasValidOAuthToken) {
             router.push("/login");
         } else {
             setAuthChecked(true);

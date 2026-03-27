@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { userPool } from "@/lib/cognito"
 import { CognitoUserAttribute } from "amazon-cognito-identity-js"
-import { LogOut, User, Mail, Shield, Save, CheckCircle2 } from "lucide-react"
+import { User, Mail, Shield, Save, CheckCircle2, Trash2 } from "lucide-react"
 
 export default function SettingsPage() {
     const router = useRouter()
@@ -13,6 +13,7 @@ export default function SettingsPage() {
     const [creatorType, setCreatorType] = useState("")
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
     const [message, setMessage] = useState<{ text: string, type: "success" | "error" } | null>(null)
 
     useEffect(() => {
@@ -35,17 +36,51 @@ export default function SettingsPage() {
                 }
             })
         } else {
-            router.push("/login")
+            // Google OAuth user — read from JWT
+            const idToken = typeof window !== "undefined" ? localStorage.getItem("cognito_id_token") : null
+            if (idToken) {
+                try {
+                    const payload = JSON.parse(atob(idToken.split(".")[1]))
+                    setName(payload.name || "")
+                    setEmail(payload.email || "")
+                    // Check token first, then localStorage fallback
+                    setCreatorType(payload["custom:creator_type"] || localStorage.getItem("creator_type") || "")
+                } catch {}
+                setLoading(false)
+            } else {
+                router.push("/login")
+            }
         }
     }, [router])
 
     const handleLogout = () => {
         const user = userPool.getCurrentUser()
-        if (user) {
-            user.signOut()
-        }
+        if (user) user.signOut()
+        localStorage.removeItem("cognito_id_token")
+        localStorage.removeItem("cognito_access_token")
+        localStorage.removeItem("cognito_refresh_token")
         router.push('/login')
     }
+
+    const handleDeleteAccount = async () => {
+        if (!confirm("Are you sure you want to delete your account? Your signed videos will remain in the system, but you will lose login access.")) return;
+        setDeleting(true);
+        setMessage(null);
+        try {
+            const { deleteAccount } = await import("@/lib/api");
+            await deleteAccount();
+            // Clear session
+            const user = userPool.getCurrentUser();
+            if (user) user.signOut();
+            localStorage.removeItem("cognito_id_token");
+            localStorage.removeItem("cognito_access_token");
+            localStorage.removeItem("cognito_refresh_token");
+            router.push("/login");
+        } catch (e: any) {
+            setMessage({ text: e.message || "Failed to delete account.", type: "error" });
+            setDeleting(false);
+        }
+    };
 
     const handleSaveProfile = (e: React.FormEvent) => {
         e.preventDefault()
@@ -59,17 +94,20 @@ export default function SettingsPage() {
                     const attributeList = [
                         new CognitoUserAttribute({ Name: "name", Value: name }),
                     ]
-
                     user.updateAttributes(attributeList, (err, result) => {
                         setSaving(false)
                         if (err) {
                             setMessage({ text: err.message || "Failed to update profile", type: "error" })
                             return
                         }
-                        setMessage({ text: "Profile updated successfully. Refresh to see changes.", type: "success" })
+                        setMessage({ text: "Profile updated successfully.", type: "success" })
                     })
                 }
             })
+        } else {
+            // Google OAuth users — name is from Google, can't update via Cognito SDK
+            setSaving(false)
+            setMessage({ text: "Profile name is managed by your Google account.", type: "error" })
         }
     }
 
@@ -174,18 +212,23 @@ export default function SettingsPage() {
                             <h3 className="text-lg font-bold text-white">Security & Access</h3>
                         </div>
                     </div>
-                    <div className="p-6">
+                    <div className="p-6 space-y-4">
                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 p-4 rounded-lg bg-red-500/5 border border-red-500/10">
                             <div>
-                                <h4 className="text-white font-medium">Log out of your account</h4>
-                                <p className="text-sm text-slate-400 mt-1">This will stop any active background tasks and clear your session.</p>
+                                <h4 className="text-white font-medium">Delete Account</h4>
+                                <p className="text-sm text-slate-400 mt-1">Removes your account and login access. Your signed videos and credentials remain in the system.</p>
                             </div>
                             <button
-                                onClick={handleLogout}
-                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg text-sm font-bold transition-all whitespace-nowrap"
+                                onClick={handleDeleteAccount}
+                                disabled={deleting}
+                                className="flex items-center justify-center gap-2 px-6 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg text-sm font-bold transition-all whitespace-nowrap disabled:opacity-50"
                             >
-                                <LogOut className="w-4 h-4" />
-                                <span>Sign Out</span>
+                                {deleting ? (
+                                    <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                                ) : (
+                                    <Trash2 className="w-4 h-4" />
+                                )}
+                                <span>{deleting ? "Deleting..." : "Delete Account"}</span>
                             </button>
                         </div>
                     </div>

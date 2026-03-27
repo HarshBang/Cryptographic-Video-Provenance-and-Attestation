@@ -28,6 +28,7 @@ def init_db():
     # Creators Table - Identity Management
     c.execute('''CREATE TABLE IF NOT EXISTS creators (
                  id TEXT PRIMARY KEY,
+                 email TEXT UNIQUE,
                  public_key TEXT UNIQUE NOT NULL,
                  private_key TEXT,
                  key_fingerprint TEXT UNIQUE NOT NULL,
@@ -126,6 +127,13 @@ def _migrate_database():
             print("Added column: creators.private_key")
         except sqlite3.OperationalError as e:
             print(f"Column private_key issue: {e}")
+
+    if 'email' not in existing_creator_columns:
+        try:
+            c.execute("ALTER TABLE creators ADD COLUMN email TEXT")
+            print("Added column: creators.email")
+        except sqlite3.OperationalError as e:
+            print(f"Column email issue: {e}")
             
     if 'key_fingerprint' not in existing_creator_columns:
         try:
@@ -192,7 +200,7 @@ def compute_key_fingerprint(public_key: str) -> str:
     """Compute SHA-256 fingerprint of public key"""
     return hashlib.sha256(public_key.encode('utf-8')).hexdigest()
 
-def create_creator(public_key: str, display_name: Optional[str] = None, explicit_id: Optional[str] = None, private_key: Optional[str] = None) -> str:
+def create_creator(public_key: str, display_name: Optional[str] = None, explicit_id: Optional[str] = None, private_key: Optional[str] = None, email: Optional[str] = None) -> str:
     """Create a new creator identity and return creator ID"""
     creator_id = explicit_id if explicit_id else str(uuid.uuid4())
     key_fingerprint = compute_key_fingerprint(public_key)
@@ -200,14 +208,13 @@ def create_creator(public_key: str, display_name: Optional[str] = None, explicit
     c = conn.cursor()
     
     try:
-        c.execute("INSERT INTO creators (id, public_key, private_key, key_fingerprint, display_name) VALUES (?, ?, ?, ?, ?)", 
-                  (creator_id, public_key, private_key, key_fingerprint, display_name))
+        c.execute("INSERT INTO creators (id, email, public_key, private_key, key_fingerprint, display_name) VALUES (?, ?, ?, ?, ?, ?)", 
+                  (creator_id, email, public_key, private_key, key_fingerprint, display_name))
         conn.commit()
         logger.info(f"Created new creator: {creator_id} with fingerprint: {key_fingerprint[:16]}...")
         return creator_id
     except sqlite3.IntegrityError as e:
         if "UNIQUE constraint failed" in str(e):
-            # Creator already exists, get their ID
             c.execute("SELECT id FROM creators WHERE public_key = ? OR key_fingerprint = ? OR id = ?", (public_key, key_fingerprint, creator_id))
             row = c.fetchone()
             if row:

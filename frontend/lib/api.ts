@@ -2,6 +2,28 @@ import { API_BASE_URL } from "./config";
 import { userPool } from "./cognito";
 
 async function getAuthToken(): Promise<string | null> {
+    // Check for OAuth (Google) token stored during callback
+    if (typeof window !== "undefined") {
+        const oauthToken = localStorage.getItem("cognito_id_token");
+        if (oauthToken) {
+            // Validate it's not expired before using it
+            try {
+                const payload = JSON.parse(atob(oauthToken.split(".")[1]));
+                if (payload.exp && Date.now() / 1000 < payload.exp) {
+                    return oauthToken;
+                } else {
+                    // Token expired, clear it
+                    localStorage.removeItem("cognito_id_token");
+                    localStorage.removeItem("cognito_access_token");
+                    localStorage.removeItem("cognito_refresh_token");
+                }
+            } catch {
+                localStorage.removeItem("cognito_id_token");
+            }
+        }
+    }
+
+    // Fall back to Cognito SDK session (email/password login)
     const cogUser = userPool.getCurrentUser();
     if (!cogUser) return null;
     return new Promise((resolve) => {
@@ -180,6 +202,22 @@ export async function deleteVideo(credentialId: string) {
     if (!res.ok) {
         const errorText = await res.text();
         throw new Error(`Failed to delete video: ${errorText}`);
+    }
+    return res.json();
+}
+
+/**
+ * Delete the current user's account (keeps video data)
+ */
+export async function deleteAccount() {
+    const authHeaders = await getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/account`, {
+        method: "DELETE",
+        headers: authHeaders,
+    });
+    if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(`Failed to delete account: ${errorText}`);
     }
     return res.json();
 }

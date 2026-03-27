@@ -90,14 +90,42 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Security(
         
     claims = verify_token(credentials.credentials)
     
-    # Extract identity
-    user_id = claims.get('sub') # Subject refers to Cognito user ID
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token missing subject (sub)")
+    import hashlib
+
+    # Try to get email — may be missing for federated (Google) users
+    email = claims.get('email', '')
+    
+    if not email:
+        # For Google federated users, extract email from identities array
+        identities = claims.get('identities', [])
+        if identities and isinstance(identities, list):
+            email = identities[0].get('userId', '')  # Google userId is the email for some configs
         
+        # Last resort: use sub as stable identity (still consistent per auth method)
+        # but derive from cognito:username which strips the provider prefix
+        if not email:
+            cognito_username = claims.get('cognito:username', '')
+            # cognito:username for Google is "google_<googleId>" — use sub instead
+            # sub is consistent for the same Google account across sessions
+            sub = claims.get('sub', '')
+            if not sub:
+                raise HTTPException(status_code=401, detail="Token missing identity claims")
+            # Use sub as fallback — note this won't merge with email/password accounts
+            # but is stable for the same Google account
+            stable_id = hashlib.sha256(sub.encode()).hexdigest()[:36]
+            return {
+                "id": stable_id,
+                "email": cognito_username,  # best available identifier
+                "name": claims.get('name', ''),
+                "creator_type": claims.get('custom:creator_type', 'independent')
+            }
+
+    # Derive stable ID from email (consistent across Google + email/password for same email)
+    stable_id = hashlib.sha256(email.lower().encode()).hexdigest()[:36]
+
     return {
-        "id": user_id,
-        "email": claims.get('email', ''),
+        "id": stable_id,
+        "email": email,
         "name": claims.get('name', ''),
         "creator_type": claims.get('custom:creator_type', 'independent')
     }

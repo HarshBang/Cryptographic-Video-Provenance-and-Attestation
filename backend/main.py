@@ -665,7 +665,8 @@ def get_my_identity(current_user: dict = Depends(get_current_user)):
             public_key=public_key, 
             private_key=private_key, 
             display_name=current_user["name"], 
-            explicit_id=current_user["id"]
+            explicit_id=current_user["id"],
+            email=current_user["email"]
         )
         creator = get_creator(current_user["id"])
         logger.info(f"Provisioned new keypair for {current_user['email']}")
@@ -743,6 +744,29 @@ def delete_video(credential_id: str, current_user: dict = Depends(get_current_us
             logger.error(f"Failed to delete file {filepath}: {e}")
             
     return {"status": "success", "message": "Video unsealed and removed."}
+
+@app.delete("/api/account")
+def delete_account(current_user: dict = Depends(get_current_user)):
+    """
+    Delete the current user's account (creator record only).
+    Videos and credentials remain in the system — only the creator login is removed.
+    """
+    from core.database import get_db_connection
+    conn = get_db_connection()
+    c = conn.cursor()
+    try:
+        # Nullify creator_id on videos so they remain but are unlinked
+        c.execute("UPDATE videos SET creator_id = NULL WHERE creator_id = ?", (current_user["id"],))
+        # Delete the creator record
+        c.execute("DELETE FROM creators WHERE id = ?", (current_user["id"],))
+        conn.commit()
+        logger.info(f"Account deleted for user {current_user['id']}")
+        return {"status": "success", "message": "Account deleted. Your signed videos remain in the system."}
+    except Exception as e:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to delete account: {e}")
+    finally:
+        conn.close()
 
 @app.get("/api/health")
 def health_check():
