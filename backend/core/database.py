@@ -371,7 +371,7 @@ def find_video_by_hash(sha256: str) -> Optional[Dict]:
     c.execute("""SELECT v.id, v.filename, v.sha256, v.phash, v.phash_sequence, v.credential_id, 
                         v.manifest, v.manifest_hash, v.signature, v.public_key, v.key_fingerprint,
                         v.hash_algorithm, v.phash_algorithm, v.signature_algorithm, v.manifest_version,
-                        v.sealed_at, c.display_name
+                        v.sealed_at, c.display_name, c.email
                  FROM videos v
                  LEFT JOIN creators c ON v.creator_id = c.id
                  WHERE v.sha256 = ? AND v.status IN ('complete', 'sealed')""", (sha256,))
@@ -396,7 +396,8 @@ def find_video_by_hash(sha256: str) -> Optional[Dict]:
             "signature_algorithm": row[13],
             "manifest_version": row[14],
             "sealed_at": row[15],
-            "creator_name": row[16]
+            "creator_name": row[16],
+            "creator_email": row[17]
         }
     return None
 
@@ -405,7 +406,7 @@ def find_video_by_phash(phash: str, phash_sequence: List[str] = None, threshold:
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""SELECT v.id, v.filename, v.sha256, v.phash, v.phash_sequence, v.credential_id, v.manifest,
-                        v.signature, v.public_key, v.key_fingerprint, v.sealed_at, c.display_name
+                        v.signature, v.public_key, v.key_fingerprint, v.sealed_at, c.display_name, c.email
                  FROM videos v
                  LEFT JOIN creators c ON v.creator_id = c.id
                  WHERE v.status IN ('complete', 'sealed')""")
@@ -465,6 +466,7 @@ def find_video_by_phash(phash: str, phash_sequence: List[str] = None, threshold:
                         "key_fingerprint": row[9],
                         "sealed_at": row[10],
                         "creator_name": row[11],
+                        "creator_email": row[12],
                         "distance": weighted_distance,
                         "match_type": "exact" if primary_distance == 0 else "similar"
                     })
@@ -485,7 +487,7 @@ def list_videos(creator_id: str = None, limit: int = 50, offset: int = 0) -> Lis
     
     query = """SELECT v.id, v.filename, v.file_size, v.sha256, v.credential_id, 
                       v.manifest, v.manifest_hash, v.signature, v.public_key, 
-                      v.key_fingerprint, v.sealed_at, v.created_at, c.display_name
+                      v.key_fingerprint, v.sealed_at, v.created_at, c.display_name, c.email
                FROM videos v
                LEFT JOIN creators c ON v.creator_id = c.id
                WHERE v.status = 'sealed'"""
@@ -517,7 +519,8 @@ def list_videos(creator_id: str = None, limit: int = 50, offset: int = 0) -> Lis
             "key_fingerprint": row[9],
             "sealed_at": row[10],
             "created_at": row[11],
-            "creator_name": row[12]
+            "creator_name": row[12],
+            "creator_email": row[13]
         })
     return videos
 
@@ -528,7 +531,7 @@ def get_video_by_credential_id(credential_id: str) -> Optional[Dict]:
     c.execute("""SELECT v.id, v.filename, v.sha256, v.phash, v.phash_sequence, v.credential_id, 
                         v.manifest, v.manifest_hash, v.signature, v.public_key, v.key_fingerprint,
                         v.hash_algorithm, v.phash_algorithm, v.signature_algorithm, v.manifest_version,
-                        v.created_at, v.sealed_at, c.display_name
+                        v.created_at, v.sealed_at, c.display_name, c.email
                  FROM videos v
                  LEFT JOIN creators c ON v.creator_id = c.id
                  WHERE v.credential_id = ?""", (credential_id,))
@@ -554,7 +557,8 @@ def get_video_by_credential_id(credential_id: str) -> Optional[Dict]:
             "manifest_version": row[14],
             "created_at": row[15],
             "sealed_at": row[16],
-            "creator_name": row[17]
+            "creator_name": row[17],
+            "creator_email": row[18]
         }
     return None
 

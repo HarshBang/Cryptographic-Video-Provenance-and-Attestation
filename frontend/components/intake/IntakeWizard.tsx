@@ -336,6 +336,14 @@ export function IntakeWizard({ hasIdentity }: IntakeWizardProps) {
                                     Identity required. Go to Identity page.
                                 </p>
                             )}
+
+                            {/* Credential ID display after signing */}
+                            {signatureResult?.credential_id && (
+                                <div className="mt-2 p-3 bg-vca-success/10 border border-vca-success/20 rounded-lg">
+                                    <p className="text-xs text-vca-success font-bold mb-1">Video Credential ID</p>
+                                    <code className="text-xs font-mono text-slate-300 break-all">{signatureResult.credential_id}</code>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

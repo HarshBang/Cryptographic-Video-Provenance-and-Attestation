@@ -93,6 +93,16 @@ function showResultCard(resObj) {
     resultIconBox.innerHTML = `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>`;
   }
 
+  // Show credential ID if present
+  const credentialBox = document.getElementById('result-credential');
+  const credentialIdEl = document.getElementById('result-credential-id');
+  if (currentCredentialId && credentialBox && credentialIdEl) {
+    credentialIdEl.textContent = currentCredentialId;
+    credentialBox.classList.remove('hidden');
+  } else if (credentialBox) {
+    credentialBox.classList.add('hidden');
+  }
+
   if (currentCredentialId) {
     resultActions.classList.remove('hidden');
   } else {
@@ -118,7 +128,8 @@ document.getElementById('btn-download-manifest').addEventListener('click', async
         ...video.manifest,
         signature: video.signature,
         credential_id: video.credential_id,
-        manifest_hash: video.manifest_hash
+        manifest_hash: video.manifest_hash,
+        creator_email: video.creator_email || "N/A"
     };
     const blob = new Blob([JSON.stringify(manifestData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -366,6 +377,7 @@ function generateCVPA_PDF(video) {
   const hashSeq = ps.hash_sequence || [];
   const frameCount = ps.frame_count ?? hashSeq.length;
   const creatorName = iden.creator_name || video.creator_name || "Author";
+  const creatorEmail = video.creator_email || iden.creator_email || "N/A";
   const sealedAt = video.sealed_at ? new Date(video.sealed_at).toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" }) : "N/A";
   const genDate = new Date().toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" });
 
@@ -387,16 +399,27 @@ function generateCVPA_PDF(video) {
   const detailRow = (label, value, y, labelW = 46) => {
       sf("bold", 10, DKGRAY); doc.text(label, M, y);
       sf("normal", 10, BLACK); const lines = doc.splitTextToSize(value, CW - labelW);
-      doc.text(lines, M + labelW, y); doc.setDrawColor(230, 234, 242); doc.setLineWidth(0.2); doc.line(M, y + 3.5, W - M, y + 3.5);
-      return y + 6.5 * lines.length + 1;
+      doc.text(lines, M + labelW, y);
+      return y + 5.5 * lines.length + 1.5;
   };
 
   const techRow = (label, value, y, labelW = 46) => {
       sf("bold", 9, DKGRAY); doc.text(label, M, y);
       doc.setFont("courier", "normal"); doc.setFontSize(8.5); doc.setTextColor(...BLACK);
       const lines = doc.splitTextToSize(value || "N/A", CW - labelW); doc.text(lines, M + labelW, y);
-      doc.setDrawColor(230, 234, 242); doc.setLineWidth(0.2); doc.line(M, y + 3.5, W - M, y + 3.5);
-      return y + 6 * lines.length + 1.5;
+      return y + 4.5 * lines.length + 2;
+  };
+
+  const PAGE_BOTTOM = 268;
+  const checkPageBreak = (y, neededHeight = 16) => {
+      if (y + neededHeight > PAGE_BOTTOM) {
+          drawFooter("Technical Evidence (cont.)");
+          doc.addPage();
+          doc.setFillColor(...NAVY); doc.rect(0, 0, W, 34, "F");
+          sf("bold", 14, WHITE); doc.text("CVPA Technical Evidence Report (cont.)", M, 20);
+          return 48;
+      }
+      return y;
   };
 
   // PAGE 1
@@ -413,15 +436,20 @@ function generateCVPA_PDF(video) {
   sf("normal", 8, MIDGRAY); doc.text("Page 1 of 2  —  Overview for Content Owners, Journalists & Legal Teams", M, 40);
 
   let y = 47;
-  doc.setFillColor(...LTBLUE); doc.roundedRect(M, y, CW, 14, 2, 2, "F");
-  sf("normal", 10, NAVY); doc.text("This certificate proves that the video listed below was created and digitally signed by its author using the CVPA system.", M + 5, y + 9, { maxWidth: CW - 10 });
-  y += 20;
+  const introText = "This certificate proves that the video listed below was created and digitally signed by its author using the CVPA system.";
+  const introLines = doc.splitTextToSize(introText, CW - 10);
+  const introPadV = 7;
+  const introBoxH = introLines.length * 5.5 + introPadV * 2;
+  doc.setFillColor(...LTBLUE); doc.roundedRect(M, y, CW, introBoxH, 2, 2, "F");
+  sf("normal", 10, NAVY); doc.text(introLines, M + 5, y + introPadV + 3.5);
+  y += introBoxH + 6;
 
   y = sectionTitle("Video Details", y);
   y = detailRow("File Name", video.filename || "N/A", y);
   y = detailRow("File Size", formatFileSize(video.file_size || 0), y);
   y = detailRow("Date Sealed", sealedAt, y);
   y = detailRow("Author", creatorName, y);
+  y = detailRow("Author Email", creatorEmail, y);
   y = detailRow("Credential ID", video.credential_id || "N/A", y);
   y += 6;
 
@@ -472,6 +500,7 @@ function generateCVPA_PDF(video) {
   y = techRow("Manifest Hash", video.manifest_hash || "N/A", y);
   y += 5;
 
+  y = checkPageBreak(y, 50);
   y = sectionTitle("Digital Signature — Ed25519", y);
   y = techRow("Algorithm", "Ed25519", y);
   y = techRow("Signature", video.signature || "N/A", y);
@@ -479,31 +508,70 @@ function generateCVPA_PDF(video) {
   y = techRow("Key Fingerprint", video.key_fingerprint || iden.key_fingerprint || "N/A", y);
   y += 5;
 
+  y = checkPageBreak(y, 40);
   y = sectionTitle("Soft Binding — Perceptual Hash Sequence (dHash)", y);
   y = techRow("Algorithm", "dHash — difference hash of sampled frames", y);
   y = techRow("Sampling Rate", ps.sampling_rate || "1 frame per 2 seconds", y);
   y = techRow("Frames Processed", String(frameCount), y);
 
   if (hashSeq.length > 0) {
-      y += 2; sf("bold", 9, DKGRAY); doc.text("Hash Sequence", M, y); y += 5;
-      const rowsNeeded = Math.ceil(hashSeq.length / 2); const rowH = 6.5; const boxH = rowsNeeded * rowH + 6;
-      doc.setFillColor(240, 244, 252); doc.roundedRect(M, y, CW, boxH, 2, 2, "F");
-      doc.setDrawColor(...LTBLUE); doc.setLineWidth(0.3); doc.roundedRect(M, y, CW, boxH, 2, 2, "S");
-      doc.setFont("courier", "normal"); doc.setFontSize(8); doc.setTextColor(...BLACK);
+      y += 2;
+      y = checkPageBreak(y, 20);
+      sf("bold", 9, DKGRAY); doc.text("Hash Sequence", M, y); y += 5;
+
+      const rowH = 5.5;
       const colW = CW / 2 - 4;
-      hashSeq.forEach((h, idx) => {
-          const col = idx % 2; const row = Math.floor(idx / 2);
-          const hx = M + 4 + col * (colW + 8); const hy = y + 5 + row * rowH;
-          doc.setTextColor(...BLUE); doc.setFontSize(7.5); doc.text(`[${String(idx + 1).padStart(2, "0")}]`, hx, hy);
-          doc.setTextColor(...BLACK); doc.setFontSize(8); doc.text(h, hx + 10, hy);
-      });
-      y += boxH + 6;
+      const rowsNeeded = Math.ceil(hashSeq.length / 2);
+      let rowStart = 0;
+
+      while (rowStart < rowsNeeded) {
+          const availableH = PAGE_BOTTOM - y - 6;
+          const rowsFit = Math.max(1, Math.floor(availableH / rowH));
+          const rowsThisPage = Math.min(rowsFit, rowsNeeded - rowStart);
+          const boxH = rowsThisPage * rowH + 6;
+
+          doc.setFillColor(240, 244, 252);
+          doc.roundedRect(M, y, CW, boxH, 2, 2, "F");
+          doc.setDrawColor(...LTBLUE); doc.setLineWidth(0.3);
+          doc.roundedRect(M, y, CW, boxH, 2, 2, "S");
+          doc.setFont("courier", "normal"); doc.setFontSize(8); doc.setTextColor(...BLACK);
+
+          for (let r = 0; r < rowsThisPage; r++) {
+              const globalRow = rowStart + r;
+              for (let col = 0; col < 2; col++) {
+                  const idx = globalRow * 2 + col;
+                  if (idx >= hashSeq.length) break;
+                  const hx = M + 4 + col * (colW + 8);
+                  const hy = y + 5 + r * rowH;
+                  doc.setTextColor(...BLUE); doc.setFontSize(7.5);
+                  doc.text(`[${String(idx + 1).padStart(2, "0")}]`, hx, hy);
+                  doc.setTextColor(...BLACK); doc.setFontSize(8);
+                  doc.text(hashSeq[idx], hx + 10, hy);
+              }
+          }
+
+          y += boxH + 4;
+          rowStart += rowsThisPage;
+
+          if (rowStart < rowsNeeded) {
+              drawFooter("Technical Evidence (cont.)");
+              doc.addPage();
+              doc.setFillColor(...NAVY); doc.rect(0, 0, W, 34, "F");
+              sf("bold", 14, WHITE); doc.text("CVPA Technical Evidence Report (cont.)", M, 20);
+              y = 48;
+              sf("bold", 9, DKGRAY); doc.text("Hash Sequence (cont.)", M, y); y += 5;
+          }
+      }
+      y += 2;
   }
 
+  y = checkPageBreak(y, 60);
   y = sectionTitle("Manifest Metadata", y);
   y = techRow("Manifest Version", m.manifest_version || m.version || "1.1", y);
   y = techRow("Timestamp (UTC)", m.timestamp || video.sealed_at || "N/A", y);
   y = techRow("Credential ID", video.credential_id || "N/A", y);
+  y = techRow("Creator", creatorName, y);
+  y = techRow("Creator Email", creatorEmail, y);
   y = techRow("File Name", video.filename || "N/A", y);
   y = techRow("File Size", `${video.file_size || 0} bytes  (${formatFileSize(video.file_size || 0)})`, y);
   y = techRow("Producer", m.producer || "CVPA Provenance System", y);

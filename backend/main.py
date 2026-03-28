@@ -25,6 +25,7 @@ from core.signing import (
     verify_signature_detached
 )
 from core.auth import get_current_user
+from core.email_utils import send_seal_confirmation
 from core.database import (
     init_db, 
     create_creator,
@@ -107,6 +108,7 @@ class VerifyResponse(BaseModel):
     match_type: str
     credential_id: Optional[str] = None
     creator_info: Optional[Dict] = None
+    creator_email: Optional[str] = None
     signature_valid: Optional[bool] = None
     manifest_hash: Optional[str] = None
     key_fingerprint: Optional[str] = None
@@ -443,6 +445,23 @@ def finalize_signature(req: FinalizeSignatureRequest, current_user: dict = Depen
     # (Removed temporary file cleanup - file is intentionally kept for Dashboard thumbnails)
     
     logger.info(f"Phase 2 signature finalized: {credential_id} for {result['filename']}")
+
+    # Send seal confirmation email to creator
+    creator_email = current_user.get("email")
+    if creator_email:
+        from datetime import datetime, timezone
+        sealed_at_str = datetime.now(timezone.utc).isoformat()
+        try:
+            send_seal_confirmation(
+                to_email=creator_email,
+                creator_name=creator.get("display_name") or current_user.get("name") or "Creator",
+                filename=result["filename"],
+                credential_id=credential_id,
+                sealed_at=sealed_at_str,
+                manifest_hash=manifest_hash or "",
+            )
+        except Exception as e:
+            logger.warning(f"Email send failed (non-fatal): {e}")
     
     return FinalizeSignatureResponse(
         credential_id=credential_id,
@@ -493,6 +512,7 @@ async def verify_video(file: UploadFile = File(...)):
                     "public_key": exact_match.get("public_key"),
                     "name": exact_match.get("creator_name")
                 },
+                creator_email=exact_match.get("creator_email"),
                 signature_valid=signature_valid,
                 manifest_hash=exact_match.get("manifest_hash"),
                 key_fingerprint=exact_match.get("key_fingerprint"),
@@ -521,6 +541,7 @@ async def verify_video(file: UploadFile = File(...)):
                         "public_key": best_match.get("public_key"),
                         "name": best_match.get("creator_name")
                     },
+                    creator_email=best_match.get("creator_email"),
                     signature_valid=signature_valid,
                     manifest_hash=best_match.get("manifest_hash"),
                     key_fingerprint=best_match.get("key_fingerprint"),
@@ -602,6 +623,7 @@ async def verify_video_url(req: VerifyUrlRequest):
                     "public_key": exact_match.get("public_key"),
                     "name": exact_match.get("creator_name")
                 },
+                creator_email=exact_match.get("creator_email"),
                 signature_valid=signature_valid,
                 manifest_hash=exact_match.get("manifest_hash"),
                 key_fingerprint=exact_match.get("key_fingerprint"),
@@ -627,6 +649,7 @@ async def verify_video_url(req: VerifyUrlRequest):
                         "public_key": best_match.get("public_key"),
                         "name": best_match.get("creator_name")
                     },
+                    creator_email=best_match.get("creator_email"),
                     signature_valid=signature_valid,
                     manifest_hash=best_match.get("manifest_hash"),
                     key_fingerprint=best_match.get("key_fingerprint"),

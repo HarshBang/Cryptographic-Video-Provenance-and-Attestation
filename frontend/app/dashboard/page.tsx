@@ -18,6 +18,7 @@ interface Video {
     sealed_at: string
     created_at: string
     creator_name: string
+    creator_email: string
 }
 
 export default function DashboardPage() {
@@ -84,7 +85,8 @@ export default function DashboardPage() {
             ...video.manifest,
             signature: video.signature,
             credential_id: video.credential_id,
-            manifest_hash: video.manifest_hash
+            manifest_hash: video.manifest_hash,
+            creator_email: video.creator_email || "N/A"
         }
         const blob = new Blob([JSON.stringify(manifestData, null, 2)], { type: "application/json" })
         const url = URL.createObjectURL(blob)
@@ -125,6 +127,7 @@ export default function DashboardPage() {
         const hashSeq: string[] = ps.hash_sequence || []
         const frameCount: number = ps.frame_count ?? hashSeq.length
         const creatorName = iden.creator_name || video.creator_name || "Author"
+        const creatorEmail = video.creator_email || iden.creator_email || "N/A"
         const sealedAt = video.sealed_at
             ? new Date(video.sealed_at).toLocaleString("en-US", { dateStyle: "long", timeStyle: "short" })
             : "N/A"
@@ -147,8 +150,6 @@ export default function DashboardPage() {
             sf("normal", 8, FGRAY)
             doc.text(`Generated: ${genDate}`, W - M, 286, { align: "right" })
         }
-
-        // Section header: left accent bar + bold uppercase title
         const sectionTitle = (title: string, y: number): number => {
             doc.setFillColor(...BLUE)
             doc.rect(M, y - 3, 3, 7, "F")
@@ -160,20 +161,17 @@ export default function DashboardPage() {
             return y + 10
         }
 
-        // Page 1 detail row — label left, value right, with a subtle rule
+        // Page 1 detail row — label left, value right, no separator line
         const detailRow = (label: string, value: string, y: number, labelW = 46): number => {
             sf("bold", 10, DKGRAY)
             doc.text(label, M, y)
             sf("normal", 10, BLACK)
             const lines = doc.splitTextToSize(value, CW - labelW)
             doc.text(lines, M + labelW, y)
-            doc.setDrawColor(230, 234, 242)
-            doc.setLineWidth(0.2)
-            doc.line(M, y + 3.5, W - M, y + 3.5)
-            return y + 6.5 * lines.length + 1
+            return y + 5.5 * lines.length + 1.5
         }
 
-        // Page 2 tech row — bold label, monospace value, subtle separator
+        // Page 2 tech row — bold label, monospace value, no separator line
         const techRow = (label: string, value: string, y: number, labelW = 46): number => {
             sf("bold", 9, DKGRAY)
             doc.text(label, M, y)
@@ -182,10 +180,22 @@ export default function DashboardPage() {
             doc.setTextColor(...BLACK)
             const lines = doc.splitTextToSize(value || "N/A", CW - labelW)
             doc.text(lines, M + labelW, y)
-            doc.setDrawColor(230, 234, 242)
-            doc.setLineWidth(0.2)
-            doc.line(M, y + 3.5, W - M, y + 3.5)
-            return y + 6 * lines.length + 1.5
+            return y + 4.5 * lines.length + 2
+        }
+
+        // Page overflow check — adds new page if y exceeds safe area
+        const PAGE_BOTTOM = 268
+        const checkPageBreak = (y: number, neededHeight: number = 16): number => {
+            if (y + neededHeight > PAGE_BOTTOM) {
+                doc.addPage()
+                doc.setFillColor(...NAVY)
+                doc.rect(0, 0, W, 34, "F")
+                sf("bold", 14, WHITE)
+                doc.text("CVPA Technical Evidence Report (cont.)", M, 20)
+                drawFooter("Technical Evidence (cont.)")
+                return 48
+            }
+            return y
         }
 
         // ════════════════════════════════════════════════════════════════════
@@ -230,15 +240,16 @@ export default function DashboardPage() {
 
         // ── Intro box ────────────────────────────────────────────────────────
         let y = 47
+        const introText = "This certificate proves that the video listed below was created & signed by its author using the CVPA system."
+        const introLines = doc.splitTextToSize(introText, CW - 10)
+        const introLineH = 5.5
+        const introPadV = 7
+        const introBoxH = introLines.length * introLineH + introPadV * 2
         doc.setFillColor(...LTBLUE)
-        doc.roundedRect(M, y, CW, 14, 2, 2, "F")
+        doc.roundedRect(M, y, CW, introBoxH, 2, 2, "F")
         sf("normal", 10, NAVY)
-        doc.text(
-            "This certificate proves that the video listed below was created and digitally signed by its author using the CVPA system.",
-            M + 5, y + 9,
-            { maxWidth: CW - 10 }
-        )
-        y += 20
+        doc.text(introLines, M + 5, y + introPadV + 3.5)
+        y += introBoxH + 6
 
         // ── Video Details ────────────────────────────────────────────────────
         y = sectionTitle("Video Details", y)
@@ -246,6 +257,7 @@ export default function DashboardPage() {
         y = detailRow("File Size",     formatFileSize(video.file_size), y)
         y = detailRow("Date Sealed",   sealedAt,                        y)
         y = detailRow("Author",        creatorName,                     y)
+        y = detailRow("Author Email",  creatorEmail,                    y)
         y = detailRow("Credential ID", video.credential_id || "N/A",   y)
         y += 6
 
@@ -342,6 +354,7 @@ export default function DashboardPage() {
         y += 5
 
         // ── Digital Signature ────────────────────────────────────────────────
+        y = checkPageBreak(y, 50)
         y = sectionTitle("Digital Signature — Ed25519", y)
         y = techRow("Algorithm",       "Ed25519",                                           y)
         y = techRow("Signature",       video.signature || "N/A",                            y)
@@ -350,6 +363,7 @@ export default function DashboardPage() {
         y += 5
 
         // ── Soft Binding — pHash Sequence ────────────────────────────────────
+        y = checkPageBreak(y, 40)
         y = sectionTitle("Soft Binding — Perceptual Hash Sequence (dHash)", y)
         y = techRow("Algorithm",        "dHash — difference hash of sampled frames",  y)
         y = techRow("Sampling Rate",    ps.sampling_rate || "1 frame per 2 seconds",  y)
@@ -357,46 +371,77 @@ export default function DashboardPage() {
 
         if (hashSeq.length > 0) {
             y += 2
+            y = checkPageBreak(y, 20)
             sf("bold", 9, DKGRAY)
             doc.text("Hash Sequence", M, y)
             y += 5
 
-            // Grid box — 2 columns
-            const rowsNeeded = Math.ceil(hashSeq.length / 2)
-            const rowH = 6.5
-            const boxH = rowsNeeded * rowH + 6
-            doc.setFillColor(240, 244, 252)
-            doc.roundedRect(M, y, CW, boxH, 2, 2, "F")
-            doc.setDrawColor(...LTBLUE)
-            doc.setLineWidth(0.3)
-            doc.roundedRect(M, y, CW, boxH, 2, 2, "S")
-
-            doc.setFont("courier", "normal")
-            doc.setFontSize(8)
-            doc.setTextColor(...BLACK)
+            // Render hash sequence row by row, adding new pages as needed
+            const rowH = 5.5
             const colW = CW / 2 - 4
-            hashSeq.forEach((h, idx) => {
-                const col = idx % 2
-                const row = Math.floor(idx / 2)
-                const hx = M + 4 + col * (colW + 8)
-                const hy = y + 5 + row * rowH
-                // index label in blue
-                doc.setTextColor(...BLUE)
-                doc.setFontSize(7.5)
-                doc.text(`[${String(idx + 1).padStart(2, "0")}]`, hx, hy)
-                // hash value in black
-                doc.setTextColor(...BLACK)
+            const rowsNeeded = Math.ceil(hashSeq.length / 2)
+
+            // Collect rows into chunks that fit on a page
+            let rowStart = 0
+            while (rowStart < rowsNeeded) {
+                const availableH = PAGE_BOTTOM - y - 6
+                const rowsFit = Math.max(1, Math.floor(availableH / rowH))
+                const rowsThisPage = Math.min(rowsFit, rowsNeeded - rowStart)
+                const boxH = rowsThisPage * rowH + 6
+
+                doc.setFillColor(240, 244, 252)
+                doc.roundedRect(M, y, CW, boxH, 2, 2, "F")
+                doc.setDrawColor(...LTBLUE)
+                doc.setLineWidth(0.3)
+                doc.roundedRect(M, y, CW, boxH, 2, 2, "S")
+
+                doc.setFont("courier", "normal")
                 doc.setFontSize(8)
-                doc.text(h, hx + 10, hy)
-            })
-            y += boxH + 6
+                doc.setTextColor(...BLACK)
+
+                for (let r = 0; r < rowsThisPage; r++) {
+                    const globalRow = rowStart + r
+                    for (let col = 0; col < 2; col++) {
+                        const idx = globalRow * 2 + col
+                        if (idx >= hashSeq.length) break
+                        const hx = M + 4 + col * (colW + 8)
+                        const hy = y + 5 + r * rowH
+                        doc.setTextColor(...BLUE)
+                        doc.setFontSize(7.5)
+                        doc.text(`[${String(idx + 1).padStart(2, "0")}]`, hx, hy)
+                        doc.setTextColor(...BLACK)
+                        doc.setFontSize(8)
+                        doc.text(hashSeq[idx], hx + 10, hy)
+                    }
+                }
+
+                y += boxH + 4
+                rowStart += rowsThisPage
+
+                if (rowStart < rowsNeeded) {
+                    drawFooter("Technical Evidence (cont.)")
+                    doc.addPage()
+                    doc.setFillColor(...NAVY)
+                    doc.rect(0, 0, W, 34, "F")
+                    sf("bold", 14, WHITE)
+                    doc.text("CVPA Technical Evidence Report (cont.)", M, 20)
+                    y = 48
+                    sf("bold", 9, DKGRAY)
+                    doc.text("Hash Sequence (cont.)", M, y)
+                    y += 5
+                }
+            }
+            y += 2
         }
 
         // ── Manifest Metadata ────────────────────────────────────────────────
+        y = checkPageBreak(y, 60)
         y = sectionTitle("Manifest Metadata", y)
         y = techRow("Manifest Version", m.manifest_version || m.version || "1.1",                    y)
         y = techRow("Timestamp (UTC)",  m.timestamp || video.sealed_at || "N/A",                     y)
         y = techRow("Credential ID",    video.credential_id || "N/A",                                y)
+        y = techRow("Creator",          creatorName,                                                  y)
+        y = techRow("Creator Email",    creatorEmail,                                                 y)
         y = techRow("File Name",        video.filename || "N/A",                                     y)
         y = techRow("File Size",        `${video.file_size} bytes  (${formatFileSize(video.file_size)})`, y)
         y = techRow("Producer",         m.producer || "CVPA Provenance System",                      y)
