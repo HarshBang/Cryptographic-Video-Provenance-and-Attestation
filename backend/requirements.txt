@@ -1,10 +1,30 @@
+# ── Web Framework ─────────────────────────────────────────────────────────────
 fastapi>=0.104.0
-uvicorn>=0.24.0
-opencv-python-headless>=4.8.0
-imagehash>=4.3.1
-numpy>=1.24.0
-python-multipart>=0.0.6
-mnemonic>=0.20
-pynacl>=1.5.0
-pillow>=10.0.0
-python-dotenv>=1.0.0
+uvicorn[standard]>=0.24.0          # [standard] adds uvloop + httptools for production
+python-multipart>=0.0.6            # multipart/form-data file uploads
+
+# ── Auth & JWT ─────────────────────────────────────────────────────────────────
+python-jose[cryptography]>=3.3.0   # JWT decode for Cognito tokens (used in auth.py)
+requests>=2.31.0                   # JWKS fetch from Cognito (used in auth.py)
+cryptography>=41.0.0               # backend for python-jose
+
+# ── Cryptography / Signing ─────────────────────────────────────────────────────
+pynacl>=1.5.0                      # Ed25519 sign/verify (signing.py)
+
+# ── Video Processing ───────────────────────────────────────────────────────────
+opencv-python-headless>=4.8.0      # frame extraction — headless = no GUI deps (EC2 safe)
+pillow>=10.0.0                     # PIL Image for imagehash
+imagehash>=4.3.1                   # dHash perceptual hashing
+numpy>=1.24.0                      # required by opencv + imagehash
+
+# ── URL Verification ───────────────────────────────────────────────────────────
+yt-dlp>=2024.1.0                   # social media stream download (verify/url endpoint)
+
+# ── Config & Utilities ─────────────────────────────────────────────────────────
+python-dotenv>=1.0.0               # .env loading (auth.py, email_utils.py)
+
+# ── Email ──────────────────────────────────────────────────────────────────────
+# smtplib is stdlib — no extra package needed
+
+# ── Removed / Not needed ───────────────────────────────────────────────────────
+# mnemonic — was listed but never imported anywhere in the codebase
