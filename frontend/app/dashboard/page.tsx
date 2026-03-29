@@ -550,7 +550,7 @@ export default function DashboardPage() {
                                                 <div className="flex items-center gap-3">
                                                     <div className="flex-shrink-0 w-16 h-10 rounded overflow-hidden bg-slate-800 border border-slate-700 relative flex items-center justify-center">
                                                         <video 
-                                                            src={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/uploads/${encodeURIComponent(video.filename)}#t=1.0`} 
+                                                            src={`${(process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api").replace('/api', '')}/uploads/${encodeURIComponent(video.filename)}#t=1.0`} 
                                                             className="w-full h-full object-cover"
                                                             preload="metadata"
                                                             muted
