@@ -1,5 +1,5 @@
-const BACKEND_URL = "http://localhost:8000";
-const FRONTEND_URL = "http://localhost:3000";
+const BACKEND_URL = "https://13.235.99.232.nip.io";
+const FRONTEND_URL = "https://13.235.99.232.nip.io";
 
 // Register context menus
 chrome.runtime.onInstalled.addListener(() => {

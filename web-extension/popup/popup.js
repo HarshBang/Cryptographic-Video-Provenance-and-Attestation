@@ -1,5 +1,5 @@
-const BACKEND_URL = "http://localhost:8000";
-const FRONTEND_URL = "http://localhost:3000";
+const BACKEND_URL = "https://13.235.99.232.nip.io";
+const FRONTEND_URL = "https://13.235.99.232.nip.io";
 const POOL_ID = "ap-south-1_ex2kwv017";
 const CLIENT_ID = "652l3a735n8siojspepglnaid2";
 
@@ -189,7 +189,7 @@ document.getElementById('login-form').addEventListener('submit', (e) => {
         const idToken = result.getIdToken().getJwtToken();
         
         // Initialize identity
-        fetch('http://localhost:8000/api/identity/me', {
+        fetch(`${BACKEND_URL}/api/identity/me`, {
           headers: {
             'Authorization': `Bearer ${idToken}`
           }
@@ -281,7 +281,7 @@ function processFile(file) {
     const formData = new FormData();
     formData.append("file", file, file.name);
 
-    fetch(`http://localhost:8000/api/intake/upload`, {
+    fetch(`${BACKEND_URL}/api/intake/upload`, {
       method: "POST",
       headers: { "Authorization": `Bearer ${result.cvpa_token}` },
       body: formData
