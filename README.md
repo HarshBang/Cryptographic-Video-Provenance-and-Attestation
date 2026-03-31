@@ -49,14 +49,21 @@ A byte-exact fingerprint of the original file. If a single bit changes, the hash
 ## Architecture
 
 ```
-Frontend (Next.js)          Backend (FastAPI)
-─────────────────           ─────────────────
-Browser keypair gen    →    /api/intake/upload
-Client-side signing    →    /api/intake/finalize-signature
-Verification UI        →    /api/verify
+Frontend (Next.js)          Backend (FastAPI)          Web Extension (Chrome)
+─────────────────           ─────────────────          ──────────────────────
+Browser keypair gen    →    /api/intake/upload    ←    Context menu actions
+Client-side signing    →    /api/intake/finalize  ←    Video verification
+Verification UI        →    /api/verify           ←    Direct/social URLs
 Dashboard              →    /api/videos
 Identity management    →    /api/identity/register
 ```
+
+### Components
+
+**Frontend:** Next.js 16 app with client-side Ed25519 signing  
+**Backend:** FastAPI with OpenCV video processing  
+**Web Extension:** Chrome extension for browser-based verification  
+**Database:** SQLite (production-ready for current scale)
 
 ### Backend: `backend/`
 
@@ -84,6 +91,17 @@ Identity management    →    /api/identity/register
 | `components/Sidebar.tsx` | Dashboard navigation |
 | `lib/api.ts` | All backend fetch calls |
 | `lib/config.ts` | Centralised API URL and system config |
+
+### Web Extension: `web-extension/`
+
+Chrome extension for browser-based video verification:
+
+- **Context Menu Actions:** Right-click verification for direct video URLs and social media pages
+- **Popup Interface:** Quick access to verification and dashboard
+- **Social Media Support:** Instagram, LinkedIn via yt-dlp
+- **CORS Configuration:** Backend configured with `chrome-extension://*` origin
+
+**Installation:** Load unpacked extension from `Cryptographic-Video-Provenance-and-Attestation/web-extension/` in Chrome developer mode.
 
 
 
@@ -163,19 +181,36 @@ When a video is submitted to `/api/verify`:
 
 
 
-## Running the Project
+## Deployment
 
-### Prerequisites
+### Production (AWS EC2)
 
+The system is deployed on AWS EC2 (Ubuntu AMI, t2.micro free tier Instance) with HTTPS:
+
+- **URL:** https://13.235.99.232.nip.io
+- **SSL:** Encrypt certificates via Certbot
+- **Domain:** nip.io (automatic DNS for any IP)
+- **Reverse Proxy:** nginx
+- **Services:** systemd (vca-backend, vca-frontend)
+
+**Key Configuration:**
+- Backend runs on port 8000 (proxied through nginx)
+- Frontend runs on port 3000 (proxied through nginx)
+- CORS configured for web extension support
+- AWS Cognito callbacks configured for HTTPS domain
+
+For detailed deployment instructions, see [Docs](https://drive.google.com/drive/folders/1TXoBV3ZyYSAJR_a1j7f6Szo_HSaCArh4?usp=sharing).
+
+### Local Development
+
+**Prerequisites:**
 - Python 3.10+
 - Node.js 20+
 
-### Backend
-
+**Backend:**
 ```bash
 cd vca-system/backend
-
-python -m venv venv # Create and activate virtual environment
+python -m venv venv
 
 # Windows:
 venv\Scripts\activate
@@ -184,22 +219,14 @@ venv\Scripts\activate
 source venv/bin/activate
 
 pip install -r requirements.txt
-
 uvicorn main:app --reload --port 8000
 ```
 
-The SQLite database (`vca.db`) is created automatically on first startup.
-
-### Frontend
-
+**Frontend:**
 ```bash
 cd vca-system/frontend
-
 npm install
-
-# Create environment file
 echo "NEXT_PUBLIC_API_URL=http://localhost:8000/api" > .env.local
-
 npm run dev
 ```
 
@@ -232,6 +259,7 @@ Open [http://localhost:3000](http://localhost:3000).
 | `pillow` | Image processing for hashing |
 | `numpy` | Numerical operations |
 | `python-multipart` | Multipart file upload parsing |
+| `yt-dlp` | Social media video download (for web extension) |
 
 
 
@@ -255,7 +283,7 @@ Sufficient for the current scope. The schema is designed to migrate to PostgreSQ
 
 | Area | Status | Notes |
 |---|---|---|
-| File storage | Local only | `uploads/` dir; production needs S3 or equivalent |
+| File storage | EC2 local storage | Currently on EC2 EBS volume; S3 for videos, RDA for DB recommended |
 | Key recovery | Not implemented | No fallback if private key is lost |
 | Video playback | Basic | Dashboard shows metadata; no inline player |
 | Scalability | Single-process | Task queue (Redis) needed for concurrent processing |
@@ -276,7 +304,9 @@ Sufficient for the current scope. The schema is designed to migrate to PostgreSQ
 | Duplicate detection | Complete |
 | Dual verification engine | Complete |
 | PDF certificate export | Complete |
-| Cloud storage | Not started |
+| Web extension (Chrome) | Complete |
+| EC2 deployment with HTTPS | Complete |
+| Cloud storage (S3) | Not started |
 | Key recovery mechanism | Not started |
 
 ## About Me
